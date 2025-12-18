@@ -1,0 +1,13 @@
+[project]
+name = "audio-postprocessor"
+version = "0.1.0"
+dependencies = [
+    "shared-storage",
+    "shared-messaging",
+    "shared-schemas"
+]
+
+[tool.uv.sources]
+shared-storage = { workspace = true }
+shared-messaging = { workspace = true }
+shared-schemas = { workspace = true }

@@ -1,0 +1,31 @@
+[project]
+name = "voice-diary"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "boto3-stubs>=1.42.9",
+    "hatchling>=1.28.0",
+    "posts>=0.2.2",
+    "scipy-stubs==1.16.3.3",
+]
+
+[tool.uv.workspace]
+members = [
+    "apps/*",
+    "libs/*"
+]
+exclude = []
+
+[tool.uv.sources]
+shared-schemas = { workspace = true }
+shared-storage = { workspace = true }
+another-package = { workspace = true }
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

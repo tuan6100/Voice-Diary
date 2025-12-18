@@ -1,0 +1,17 @@
+[project]
+name = "audio-segmenter"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic-settings",
+    "pydub",
+    "shared-messaging",
+    "shared-storage",
+    "shared-schemas",
+    "asyncio"
+]
+
+[tool.uv.sources]
+shared-messaging = { workspace = true }
+shared-storage = { workspace = true }
+shared-schemas = { workspace = true }

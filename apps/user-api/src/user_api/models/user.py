@@ -1,0 +1,17 @@
+from typing import Optional
+from datetime import datetime
+from beanie import Document, Indexed
+from pydantic import Field
+
+
+class User(Document):
+    username: Indexed(str, unique=True)
+    email: Indexed(str, unique=True)
+    display_name: str
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "users"

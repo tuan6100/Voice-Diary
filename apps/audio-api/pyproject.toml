@@ -1,0 +1,16 @@
+[project]
+name = "media-api"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "python-multipart",
+    "redis",
+    "shared-storage",
+    "shared-messaging",
+    "shared-schemas"
+]
+
+[tool.uv.sources]
+shared-storage = { workspace = true }
+shared-messaging = { workspace = true }
+shared-schemas = { workspace = true }

@@ -1,0 +1,14 @@
+[project]
+name = "shared-messaging"
+version = "0.1.0"
+dependencies = [
+    "aio-pika",
+    "shared-schemas",
+]
+
+[tool.uv.sources]
+shared-schemas = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

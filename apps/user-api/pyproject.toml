@@ -1,0 +1,18 @@
+[project]
+name = "user-api"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "beanie",
+    "motor",
+    "pydantic-settings",
+    "python-slugify"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/user_api"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

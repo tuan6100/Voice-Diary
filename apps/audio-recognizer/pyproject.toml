@@ -1,0 +1,22 @@
+[project]
+name = "audio-recognizer"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "whisperx",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "shared-messaging",
+    "shared-storage",
+    "shared-schemas",
+    "pydantic-settings",
+    "numpy",
+    "pandas",
+    "huggingface_hub[hf_xet]"
+]
+
+[tool.uv.sources]
+shared-messaging = { workspace = true }
+shared-storage = { workspace = true }
+shared-schemas = { workspace = true }
+

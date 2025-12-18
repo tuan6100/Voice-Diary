@@ -1,0 +1,17 @@
+[project]
+name = "audio-transcoder"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "ffmpeg-python>=0.2.0",
+    "shared-messaging",
+    "shared-storage",
+    "shared-schemas",
+    "pydantic-settings",
+    "asyncio"
+]
+
+[tool.uv.sources]
+shared-messaging = { workspace = true }
+shared-storage = { workspace = true }
+shared-schemas = { workspace = true }

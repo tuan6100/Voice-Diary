@@ -1,0 +1,15 @@
+[project]
+name = "audio-preprocessor"
+version = "0.1.0"
+dependencies = [
+    "ffmpeg-python",
+    "shared-messaging",
+    "shared-storage",
+    "shared-schemas",
+    "pydantic-settings",
+    "asyncio"
+]
+
+[tool.uv.sources]
+shared-messaging = { workspace = true }
+shared-schemas = { workspace = true }

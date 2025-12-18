@@ -1,0 +1,15 @@
+[project]
+name = "audio-orchestrator"
+version = "0.1.0"
+dependencies = [
+    "redis",
+    "asyncio",
+    "pydantic-settings",
+    "shared-messaging",
+    "shared-schemas",
+
+]
+
+[tool.uv.sources]
+shared-messaging = { workspace = true }
+shared-schemas = { workspace = true }
