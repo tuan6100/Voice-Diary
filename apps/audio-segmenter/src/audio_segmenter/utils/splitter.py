@@ -10,7 +10,6 @@ def split_audio_smart(
         min_silence_len: int = 700,
         silence_thresh: int = -40
 ) -> List[Dict]:
-
     os.makedirs(output_dir, exist_ok=True)
     audio = AudioSegment.from_file(input_path)
     nonsilent_ranges = detect_nonsilent(
@@ -37,5 +36,4 @@ def split_audio_smart(
             "end_ms": end_ms,
             "duration_ms": end_ms - start_ms
         })
-
     return chunks_metadata

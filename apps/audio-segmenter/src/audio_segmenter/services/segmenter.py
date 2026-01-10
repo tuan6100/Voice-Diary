@@ -10,7 +10,6 @@ from shared_storage.s3 import S3Client
 
 logger = logging.getLogger(__name__)
 
-
 class AudioSegmenterService:
     def __init__(self, s3: S3Client, producer: RabbitMQProducer):
         self.s3 = s3

@@ -8,13 +8,13 @@ from audio_orchestrator.cores.config import settings
 # Import commands
 from shared_schemas.commands import (
     PreprocessCommand, SegmentCommand, RecognizeCommand,
-    TranscodeCommand, EnhanceCommand, DiarizeCommand, PostProcessCommand
+    TranscodeCommand, EnhanceCommand, DiarizeCommand, PostProcessCommand, LanguageDetectCommand
 )
 # Import events
 from shared_schemas.events import (
     FileUploadedEvent, PreprocessCompletedEvent, SegmentCompletedEvent,
     RecognitionCompletedEvent, TranscodeCompletedEvent,
-    DiarizationCompletedEvent, EnhancementCompletedEvent, JobCompletedEvent
+    DiarizationCompletedEvent, EnhancementCompletedEvent, JobCompletedEvent, LanguageDetectionCompletedEvent
 )
 
 from audio_orchestrator.services.state_manager import StateManager, JobStatus
@@ -89,17 +89,33 @@ class WorkflowOrchestrator:
     async def handle_enhancement_done(self, event: dict):
         try:
             data = EnhancementCompletedEvent(**event)
-            logger.info(f"Enhance done for {data.job_id} seg {data.index}")
-            cmd_recog = RecognizeCommand(
+            logger.info(f"Enhance done {data.job_id}:{data.index}. Sending to LangDetect.")
+            cmd_detect = LanguageDetectCommand(
                 job_id=data.job_id,
-                index=data.index,
                 input_path=data.s3_path,
+                index=data.index,
                 start_ms=data.start_ms,
                 end_ms=data.end_ms
             )
+            await self.producer.publish("audio_ops", "cmd.lang_detect", cmd_detect)
+        except Exception as e:
+            logger.error(f"Error handle_enhancement_done: {e}")
+
+    async def handle_lang_detect_done(self, event: dict):
+        try:
+            data = LanguageDetectionCompletedEvent(**event)
+            logger.info(f"LangDetect done {data.job_id}:{data.index} ({data.language_code}). Sending to Recognize.")
+            cmd_recog = RecognizeCommand(
+                job_id=data.job_id,
+                input_path=data.input_path,
+                index=data.index,
+                start_ms=data.start_ms,
+                end_ms=data.end_ms,
+                language=data.language
+            )
             await self.producer.publish("audio_ops", "cmd.recognize", cmd_recog)
         except Exception as e:
-            logger.error(f"Error in handle_enhancement_done: {e}")
+            logger.error(f"Error handle_lang_detect_done: {e}")
 
     async def handle_recognition_done(self, event: dict):
         try:
@@ -158,24 +174,18 @@ class WorkflowOrchestrator:
         is_diar_done = steps.get("diarization") == "1"
         is_trans_done = steps.get("transcode") == "1"
         is_already_triggered = steps.get("postprocess_triggered") == "1"
-
         if is_recog_done and is_diar_done and is_trans_done and not is_already_triggered:
             logger.info(f"Job {job_id}: All inputs ready. Triggering Post-Process.")
             await self._mark_step_completed(job_id, "postprocess_triggered")
-
             raw_transcripts = await self.state.redis.lrange(f"job:{job_id}:transcripts", 0, -1)
             parsed_transcripts = [json.loads(x) for x in raw_transcripts]
             parsed_transcripts.sort(key=lambda x: x['start'])
-
             transcript_s3_key = f"analysis/{job_id}/transcript.json"
-
             with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp:
                 json.dump(parsed_transcripts, tmp, ensure_ascii=False)
                 tmp_path = tmp.name
-
             await self.s3.upload_file(tmp_path, transcript_s3_key)
             os.remove(tmp_path)
-
             cmd = PostProcessCommand(job_id=job_id)
             await self.producer.publish("audio_ops", "cmd.postprocess", cmd)
             await self.state.update_progress(job_id, JobStatus.POST_PROCESSING, 80, "Finalizing...")
@@ -185,6 +195,7 @@ class WorkflowOrchestrator:
             data = JobCompletedEvent(**event)
             job_id = data.job_id
             logger.info(f"Job {job_id} FULLY COMPLETED. Starting Cleanup...")
+            await self.state.update_progress(job_id, JobStatus.COMPLETED, 100, "Audio has been recognized successfully")
             cleanup_tasks = []
             for target in settings.CLEANUP_TARGETS:
                 prefix = f"{target}/{job_id}/"

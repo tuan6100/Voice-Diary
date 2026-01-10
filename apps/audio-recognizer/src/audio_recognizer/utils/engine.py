@@ -6,6 +6,7 @@ from omegaconf.listconfig import ListConfig
 
 logger = logging.getLogger(__name__)
 
+
 class WhisperEngine:
     _instance = None
 
@@ -21,11 +22,14 @@ class WhisperEngine:
             return _original_torch_load(*args, **kwargs)
         torch.load = _trusted_load
 
+        logger.info(f"Loading WhisperX Model on {self.device}...")
         self.model = whisperx.load_model(
             "large-v3",
             self.device,
             compute_type=self.compute_type
         )
+
+        logger.info("Loading Align Model...")
         self.align_model, self.align_metadata = whisperx.load_align_model(
             language_code="vi",
             device=self.device
@@ -38,11 +42,17 @@ class WhisperEngine:
             cls._instance = cls()
         return cls._instance
 
-    def transcribe_file(self, audio_path: str):
+    def transcribe_file(self, audio_path: str, language: str = None):
         try:
             logger.info(f"Transcribing: {audio_path}")
             audio = whisperx.load_audio(audio_path)
-            result = self.model.transcribe(audio, batch_size=self.batch_size)
+
+            options = {"batch_size": self.batch_size}
+            if language:
+                options["language"] = language
+
+            result = self.model.transcribe(audio, **options)
+
             logger.info("Aligning result...")
             result_aligned = whisperx.align(
                 result["segments"],
@@ -52,6 +62,7 @@ class WhisperEngine:
                 self.device,
                 return_char_alignments=False
             )
+
             gc.collect()
             if self.device == "cuda":
                 torch.cuda.empty_cache()

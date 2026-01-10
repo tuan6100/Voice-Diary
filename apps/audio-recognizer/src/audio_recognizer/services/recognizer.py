@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from audio_recognizer.utils.whisper_engine import WhisperEngine
+from audio_recognizer.utils.engine import WhisperEngine
 from shared_messaging.producer import RabbitMQProducer
 from shared_schemas.commands import RecognizeCommand
 from shared_schemas.events import RecognitionCompletedEvent
@@ -30,13 +30,14 @@ class AudioRecognizerService:
         local_output_json = self.temp_dir / f"{job_id}_{index}.json"
         local_input_str = str(local_input)
         local_output_str = str(local_output_json)
+        language = command.language
 
         try:
             logger.info(f"Processing Recognizer Job {job_id} - Chunk {index}")
             await self.s3.download_file(command.input_path, local_input_str)
             def run_whisper_blocking():
                 engine = WhisperEngine.get_instance()
-                return engine.transcribe_file(local_input_str)
+                return engine.transcribe_file(local_input_str, language)
             words_data = await asyncio.to_thread(run_whisper_blocking)
             with open(local_output_str, "w", encoding="utf-8") as f:
                 json.dump(words_data, f, ensure_ascii=False)

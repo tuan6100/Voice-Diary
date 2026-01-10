@@ -1,0 +1,23 @@
+[project]
+name = "audio-langdetector"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "speechbrain",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "scipy",
+    "numpy",
+    "pydub",
+    "soundfile",
+    "shared-messaging",
+    "shared-storage",
+    "shared-schemas",
+    "pydantic-settings",
+]
+
+[tool.uv.sources]
+shared-messaging = { workspace = true }
+shared-storage = { workspace = true }
+shared-schemas = { workspace = true }
+

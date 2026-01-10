@@ -15,19 +15,13 @@ logger = logging.getLogger(__name__)
 
 async def main():
     logger.info("Starting Audio Orchestrator...")
-
-    # Setup Infrastructure
     redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-    # Producer
     producer = RabbitMQProducer(settings.RABBITMQ_URL)
     await producer.connect()
-
-    # Consumer (Chỉ cần 1 instance, lib đã tự tách queue)
     consumer = RabbitMQConsumer(settings.RABBITMQ_URL, service_name="orchestrator")
     await consumer.connect()
 
-    # Setup Services
     s3 = S3Client(
         bucket=settings.S3_BUCKET_NAME,
         endpoint=settings.S3_ENDPOINT,
@@ -41,11 +35,11 @@ async def main():
     await consumer.subscribe("worker_events", "preprocess.done", workflow.handle_preprocess_done)
     await consumer.subscribe("worker_events", "segment.done", workflow.handle_segment_done)
     await consumer.subscribe("worker_events", "enhancement.done", workflow.handle_enhancement_done)
+    await consumer.subscribe("worker_events", "lang_detect.done", workflow.handle_lang_detect_done)
     await consumer.subscribe("worker_events", "recognition.done", workflow.handle_recognition_done)
     await consumer.subscribe("worker_events", "diarization.done", workflow.handle_diarization_done)
     await consumer.subscribe("worker_events", "transcode.done", workflow.handle_transcode_done)
     await consumer.subscribe("worker_events", "job.finalized", workflow.handle_job_finalized)
-
     logger.info("Orchestrator is running with ISOLATED QUEUES per handler...")
 
     try:
