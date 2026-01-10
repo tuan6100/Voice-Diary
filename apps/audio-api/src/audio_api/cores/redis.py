@@ -1,4 +1,5 @@
-from redis.asyncio import Redis, ConnectionPool
+from redis.asyncio import ConnectionPool
+from redis.asyncio.client import Redis
 
 from audio_api.cores.config import settings
 

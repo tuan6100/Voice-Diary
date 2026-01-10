@@ -3,8 +3,12 @@ name = "media-api"
 version = "0.1.0"
 dependencies = [
     "fastapi",
+    "uvicorn",
     "python-multipart",
     "redis",
+    "beanie",
+    "motor",
+    "pydantic-settings",
     "shared-storage",
     "shared-messaging",
     "shared-schemas"

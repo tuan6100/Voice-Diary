@@ -11,12 +11,10 @@ class ProcessingStatus(str, Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
-
 class TranscriptSegment(BaseModel):
     start: float
     end: float
     text: str
-
 
 class AudioMetadata(BaseModel):
     original_url: Optional[str] = None
@@ -25,30 +23,17 @@ class AudioMetadata(BaseModel):
     file_size: int = 0
 
 
-class Post(Document):
-    user_id: Indexed(str)
-    caption: Optional[str] = None
-    hashtags: List[str] = []
-
-
+class Audio(Document):
+    audio_id: Indexed(str)
     status: ProcessingStatus = ProcessingStatus.PENDING
     job_id: Optional[str] = Indexed(unique=True)
     audio_meta: AudioMetadata = AudioMetadata()
-
-
     transcript: List[TranscriptSegment] = []
 
-
-    likes_count: int = 0
-    views_count: int = 0
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    recorded_date: datetime = Field(default_factory=datetime.utcnow)
-
     class Settings:
-        name = "posts"
+        name = "audios"
         indexes = [
-            [("transcript.text", "text"), ("caption", "text")],
+            [("transcript.text", "text")],
             "hashtags",
             "created_at"
         ]

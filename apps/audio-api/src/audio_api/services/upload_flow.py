@@ -16,7 +16,7 @@ class UploadFlowService:
         self.s3 = s3
         self.Producer = producer
 
-    async def create_upload_session(self, user_id: str, filename: str, content_type: str):
+    async def create_upload_session(self, filename: str, content_type: str):
         job_id = str(uuid.uuid4())
         date_prefix = datetime.now(tz=timezone(timedelta(hours=7))).strftime('%Y-%m-%d')
         object_key = f"raw/{date_prefix}/{job_id}/{filename}"

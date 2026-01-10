@@ -7,7 +7,6 @@ from pydantic import Field
 class User(Document):
     username: Indexed(str, unique=True)
     email: Indexed(str, unique=True)
-    display_name: str
     avatar_url: Optional[str] = None
     bio: Optional[str] = None
 
