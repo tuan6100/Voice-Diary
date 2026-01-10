@@ -33,6 +33,15 @@ class DiarizationCompletedEvent(BaseModel):
     job_id: str
     speaker_segments: List[SpeakerSegment]
 
+class LanguageDetectionCompletedEvent(BaseModel):
+    job_id: str
+    language: str
+    probability: float
+    index: int
+    input_path: str
+    start_ms: int
+    end_ms: int
+
 class RecognitionCompletedEvent(BaseModel):
     job_id: str
     index: int
@@ -46,10 +55,8 @@ class TranscodeCompletedEvent(BaseModel):
     job_id: str
     hls_path: str
 
-
 class JobCompletedEvent(BaseModel):
-    """Sự kiện thông báo Job đã hoàn tất sau Post-processor"""
     job_id: str
     metadata_path: str
-    status: str  # e.g., "COMPLETED"; keep as string for now per conventions
-    error: Optional[str] = None  # optional error message when failures occur
+    status: str
+    error: Optional[str] = None

@@ -22,13 +22,20 @@ class DiarizeCommand(BaseModel):
     job_id: str
     input_path: str
 
+class LanguageDetectCommand(BaseModel):
+    job_id: str
+    input_path: str
+    index: int
+    start_ms: int
+    end_ms: int
+
 class RecognizeCommand(BaseModel):
     job_id: str
     input_path: str
-    segments: Optional[List[Dict]] = None
-    index: Optional[int] = None
+    index: int
     start_ms: int
     end_ms: int
+    language: str
 
 class TranscodeCommand(BaseModel):
     job_id: str

@@ -3,7 +3,6 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from pathlib import Path
 import logging
-import json
 from typing import Any, Optional
 import asyncio
 
