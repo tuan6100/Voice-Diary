@@ -15,7 +15,7 @@ class AudioProcessorService:
     def __init__(self, s3: S3Client, producer: RabbitMQProducer):
         self.s3 = s3
         self.producer = producer
-        self.temp_dir = Path("/tmp/audio-processing")
+        self.temp_dir = Path("tmp/audio-processing")
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     async def handle_command(self, cmd_data: dict):

@@ -1,4 +1,6 @@
 import logging
+import os
+
 import torch
 from speechbrain.inference.classifiers import EncoderClassifier
 
@@ -15,7 +17,7 @@ class  VoxLinguaEngine:
 
         self.classifier = EncoderClassifier.from_hparams(
             source="speechbrain/lang-id-voxlingua107-ecapa",
-            savedir="tmp_models/lang_id_model",
+            savedir=f"{os.getenv('HF_HOME', '')}/cache/speechbrain/lang-id-voxlingua107-ecapa",
             run_opts=run_opts
         )
         logger.info("LanguageID Model loaded successfully.")
@@ -31,7 +33,7 @@ class  VoxLinguaEngine:
     def detect(self, audio_path: str):
         signal = self.classifier.load_audio(audio_path)
         prediction = self.classifier.classify_batch(signal)
-        accuracy = prediction[0].item()
+        accuracy = prediction[1].exp().item()
         label_raw = prediction[3][0]
         lang_code = label_raw.split(":")[0].strip()
         return lang_code, accuracy

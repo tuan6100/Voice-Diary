@@ -23,7 +23,7 @@ class LanguageDetectorService:
         command = LanguageDetectCommand(**cmd_data)
 
         local_input = self.temp_dir / f"{command.job_id}_{command.index}.wav"
-        local_input_str = str(local_input)
+        local_input_str = str(local_input.resolve()).replace("\\", "/")
 
         try:
             logger.info(f"Detecting language for Job {command.job_id} Seg {command.index}...")

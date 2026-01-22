@@ -104,7 +104,7 @@ class WorkflowOrchestrator:
     async def handle_lang_detect_done(self, event: dict):
         try:
             data = LanguageDetectionCompletedEvent(**event)
-            logger.info(f"LangDetect done {data.job_id}:{data.index} ({data.language_code}). Sending to Recognize.")
+            logger.info(f"LangDetect done {data.job_id}:{data.index} ({data.language}). Sending to Recognize.")
             cmd_recog = RecognizeCommand(
                 job_id=data.job_id,
                 input_path=data.input_path,

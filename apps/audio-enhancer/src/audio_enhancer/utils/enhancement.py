@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torchaudio
 import logging
@@ -21,7 +23,7 @@ class AudioEnhancerModel:
             run_opts = {"device": "cuda"} if torch.cuda.is_available() else {"device": "cpu"}
             cls._model = SepformerSeparation.from_hparams(
                 source="speechbrain/sepformer-wham16k-enhancement",
-                savedir="D:/tmp/pretrained_models/sepformer-wham16k-enhancement",
+                savedir=f"{os.getenv('HF_HOME', '')}/cache/speechbrain/sepformer-wham16k-enhancement",
                 run_opts=run_opts
             )
             logger.info(f"Model loaded on {run_opts['device']}")

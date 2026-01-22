@@ -14,6 +14,10 @@ class WhisperEngine:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.compute_type = "float16" if self.device == "cuda" else "int8"
         self.batch_size = 16
+        self.asr_options = {
+            "hotwords": None,
+            "temperatures": [0],
+        }
 
         torch.serialization.add_safe_globals([ListConfig])
         _original_torch_load = torch.load
@@ -26,7 +30,8 @@ class WhisperEngine:
         self.model = whisperx.load_model(
             "large-v3",
             self.device,
-            compute_type=self.compute_type
+            compute_type=self.compute_type,
+            asr_options=self.asr_options,
         )
 
         logger.info("Loading Align Model...")
@@ -47,10 +52,10 @@ class WhisperEngine:
             logger.info(f"Transcribing: {audio_path}")
             audio = whisperx.load_audio(audio_path)
 
-            options = {"batch_size": self.batch_size}
-            if language:
-                options["language"] = language
-
+            options = {
+                "batch_size": self.batch_size,
+                "language": language
+            }
             result = self.model.transcribe(audio, **options)
 
             logger.info("Aligning result...")
