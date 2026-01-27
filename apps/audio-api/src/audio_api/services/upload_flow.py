@@ -2,6 +2,7 @@ import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 
+from audio_api.models.audio import ProcessingStatus, Audio
 from shared_messaging.producer import RabbitMQProducer
 from shared_storage.s3 import S3Client
 
@@ -33,6 +34,16 @@ class UploadFlowService:
         }
 
     async def trigger_processing(self, user_id: str, job_id: str):
+        new_audio = Audio(
+            user_id=user_id,
+            job_id=job_id,
+            status=ProcessingStatus.PENDING,
+            caption="New Recording",
+            created_at=datetime.now(datetime.UTC) ,
+            transcript=[],
+        )
+        # Beanie insert
+        await new_audio.insert()
         event = FileUploadedEvent(
             job_id=job_id,
             user_id=user_id,

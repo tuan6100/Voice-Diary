@@ -1,7 +1,7 @@
 import logging
 from shared_schemas.events import JobCompletedEvent
 from shared_storage.s3 import S3Client
-from audio_api.models.audio import Audio, ProcessingStatus, AudioMetadata
+from audio_api.models.audio import Audio, ProcessingStatus, AudioMetadata, TranscriptSegment
 from audio_api.models.post import Post
 from audio_api.models.album import Album
 
@@ -13,9 +13,9 @@ class HandleUploadFinishedService:
         self.s3 = s3
 
     async def handle_job_finalized(self, event_data: dict):
+        event = JobCompletedEvent(**event_data)
         try:
-            event = JobCompletedEvent(**event_data)
-            logger.info(f"⚡ Processing finalized job: {event.job_id}")
+            logger.info(f"Processing finalized job: {event.job_id}")
             metadata = await self.s3.read_json(event.metadata_path)
             if not metadata:
                 logger.error("Missing metadata")
@@ -33,7 +33,7 @@ class HandleUploadFinishedService:
                 duration=results.get("duration", 0.0)
             )
             audio.transcript = [
-                {"start": s["start"], "end": s["end"], "text": s["text"]}
+                TranscriptSegment(start=s["start"], end=s["end"], text=s["text"])
                 for s in results.get("transcript_aligned", [])
             ]
             await audio.save()
@@ -41,7 +41,6 @@ class HandleUploadFinishedService:
             if linked_post:
                 pass
             await self._add_to_default_album(audio.user_id, str(linked_post.id if linked_post else audio.id))
-
 
         except Exception as e:
             logger.error(f"Failed to sync job {event.job_id}: {e}", exc_info=True)

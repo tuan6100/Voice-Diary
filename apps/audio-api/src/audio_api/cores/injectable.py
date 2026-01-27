@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, AsyncGenerator
 
-from fastapi import Depends, Header
+from authlib.jose import jwt
+from fastapi import Depends, Header, HTTPException
 from redis.asyncio import Redis
 
 from audio_api.cores.config import settings
@@ -35,10 +36,17 @@ def get_Producer() -> RabbitMQProducer:
         raise RuntimeError("Producer not initialized")
     return _Producer
 
-async def get_current_user_id(authorization: Annotated[str | None, Header()] = None) -> str:
+async def get_current_user_id(authorization: str = Header(None)) -> str:
     if not authorization:
-        return "user_demo_123"
-    return "user_from_token"
+        raise HTTPException(401, "Missing Authorization Header")
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != 'bearer':
+            raise HTTPException(401, "Invalid auth scheme")
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        return payload.get("sub")
+    except Exception:
+        raise HTTPException(401, "Invalid or expired token")
 
 def get_upload_service(
         s3: S3Client = Depends(get_s3_client),

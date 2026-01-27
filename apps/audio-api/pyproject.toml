@@ -1,6 +1,7 @@
 [project]
-name = "media-api"
+name = "audio-api"
 version = "0.1.0"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -11,7 +12,12 @@ dependencies = [
     "pydantic-settings",
     "shared-storage",
     "shared-messaging",
-    "shared-schemas"
+    "shared-schemas",
+    "Authlib",
+    "httpx",
+    "Starlette",
+    "google-auth-oauthlib",
+    "google-api-python-client"
 ]
 
 [tool.uv.sources]

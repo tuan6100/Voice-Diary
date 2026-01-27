@@ -27,18 +27,25 @@ async def init_upload(
 async def confirm_upload(
         job_id: str,
         user_id: str = Depends(get_current_user_id),
-        service: UploadFlowService = Depends(get_upload_service)
+        service: UploadFlowService = Depends(get_upload_service),
+        redis: Redis = Depends(get_redis)
 ):
-    """
-    Client gọi API này sau khi đã PUT file thành công lên S3.
-    Server sẽ bắn Event để các worker bắt đầu xử lý.
-    """
+    redis_key = f"job:{job_id}"
+    job_data = await redis.hgetall(redis_key)
+    if not job_data:
+        raise HTTPException(404, "Job not found or expired")
+    job_owner = job_data.get(b"user_id", job_data.get("user_id"))
+    if job_owner:
+        job_owner = job_owner.decode('utf-8') if isinstance(job_owner, bytes) else job_owner
+        if job_owner != user_id:
+            raise HTTPException(403, "You don't have permission to confirm this upload")
     result = await service.trigger_processing(user_id, job_id)
     return result
 
 @router.get("/progress/{job_id}")
 async def get_upload_status(
         job_id: str,
+        user_id: str = Depends(get_current_user_id),
         redis: Redis = Depends(get_redis)
 ):
     redis_key = f"job:{job_id}"
@@ -46,10 +53,13 @@ async def get_upload_status(
     print(f"Job data: {job_data}")
     print(f"Type: {type(job_data)}")
     print(f"Empty check: {not job_data}")
-
     if not job_data:
         raise HTTPException(status_code=404, detail="Job not found or expired")
-
+    job_owner = job_data.get(b"user_id", job_data.get("user_id"))
+    if job_owner:
+        job_owner = job_owner.decode('utf-8') if isinstance(job_owner, bytes) else job_owner
+        if job_owner != user_id:
+            raise HTTPException(403, "You don't have permission to view this job")
     return {
         "job_id": job_id,
         "status": job_data.get("status", "UNKNOWN"),

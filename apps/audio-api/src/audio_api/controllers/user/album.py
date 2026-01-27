@@ -1,6 +1,8 @@
 # src/audio_api/controllers/user/album.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from beanie import PydanticObjectId
+
+from audio_api.cores.injectable import get_current_user_id
 from audio_api.models.album import Album
 from audio_api.models.post import Post
 from audio_api.models.audio import Audio
@@ -9,17 +11,25 @@ router = APIRouter()
 
 
 @router.post("/")
-async def create_album(title: str, user_id: str = "test_user"):
+async def create_album(
+        title: str,
+        user_id: str = Depends(get_current_user_id)
+):
     album = Album(user_id=user_id, title=title)
     await album.insert()
     return album
 
 
 @router.post("/{album_id}/add")
-async def add_post_to_album(album_id: PydanticObjectId, post_id: str):
+async def add_post_to_album(
+        album_id: PydanticObjectId,
+        post_id: str,
+        user_id: str = Depends(get_current_user_id)
+):
     album = await Album.get(album_id)
     if not album: raise HTTPException(404)
-
+    if album.user_id != user_id:
+        raise HTTPException(403, "You do not have permission to modify this album")
     if post_id not in album.post_ids:
         album.post_ids.append(post_id)
         await album.save()

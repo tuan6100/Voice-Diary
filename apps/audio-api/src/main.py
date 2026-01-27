@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from audio_api.cores import injectable
 from audio_api.cores.config import settings
@@ -75,9 +76,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# OAuth2
+app.add_middleware(SessionMiddleware, secret_key=settings.JWT_SECRET_KEY)
+
 # Router
 app.include_router(api_router, prefix="/api/v1")
-
 
 @app.get("/health")
 def health():

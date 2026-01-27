@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Audio API"
+    JWT_SECRET_KEY: str = "JWT_SECRET_KEY"
 
     # S3 Config
     S3_ENDPOINT: Optional[str] = None

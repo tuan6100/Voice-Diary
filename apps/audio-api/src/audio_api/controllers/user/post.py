@@ -1,11 +1,11 @@
-# src/audio_api/controllers/user/post.py
-from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
-from beanie import PydanticObjectId
-from beanie.operators import Text, RegEx
 
+from beanie import PydanticObjectId
+from beanie.operators import Text
+from fastapi import APIRouter, HTTPException
+
+from audio_api.models.audio import Audio
 from audio_api.models.post import Post
-from audio_api.models.audio import Audio, ProcessingStatus
 
 router = APIRouter()
 
@@ -18,10 +18,8 @@ async def get_feed(
         hashtag: Optional[str] = None
 ):
     queries = []
-
     if q:
         queries.append(Text(q))
-
     if hashtag:
         queries.append(Post.hashtags == hashtag)
     query_obj = Post.find(*queries).sort(-Post.uploaded_at).limit(limit).skip(skip)
@@ -36,7 +34,6 @@ async def get_feed(
                 "duration": audio.audio_meta.duration,
                 "preview_text": audio.transcript[0].text if audio.transcript else ""
             })
-
     return results
 
 

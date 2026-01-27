@@ -24,11 +24,13 @@ class AudioMetadata(BaseModel):
 
 
 class Audio(Document):
-    audio_id: Indexed(str)
+    user_id: Indexed(str)
     status: ProcessingStatus = ProcessingStatus.PENDING
     job_id: Optional[str] = Indexed(unique=True)
     audio_meta: AudioMetadata = AudioMetadata()
     transcript: List[TranscriptSegment] = []
+    caption: str = ""
+    created_at: datetime
 
     class Settings:
         name = "audios"

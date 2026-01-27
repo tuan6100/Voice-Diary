@@ -9,4 +9,4 @@ api_router.include_router(media.router, prefix="/media", tags=["Streaming"])
 
 api_router.include_router(post.router, prefix="/feed", tags=["Feed & Posts"])
 api_router.include_router(album.router, prefix="/albums", tags=["Albums"])
-# api_router.include_router(auth.router, prefix="/auth", tags=["Auth"]) ...
+api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
