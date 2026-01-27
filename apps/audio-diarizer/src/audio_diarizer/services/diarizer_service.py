@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 from pathlib import Path
@@ -27,20 +28,18 @@ class DiarizerService:
 
         try:
             logger.info(f"Diarizing Job {job_id}...")
-            # FIX: Thêm await
-            await self.s3.download_file(s3_path, local_file_str)
-
-            # Đảm bảo hàm này trả về list các dict khớp với SpeakerSegment model
-            segments = diarize_audio(local_file_str)
+            if not local_file.exists():
+                await self.s3.download_file(s3_path, local_file_str)
+            segments = await asyncio.to_thread(diarize_audio, local_file_str)
             logger.info(f"Found {len(segments)} turns in audio.")
-
             event = DiarizationCompletedEvent(
                 job_id=job_id,
                 speaker_segments=segments
             )
             await self.Producer.publish("worker_events", "diarization.done", event)
+            logger.info(f"Diarization completed for Job {job_id}.")
+            if local_file.exists(): os.remove(local_file)
 
         except Exception as e:
             logger.error(f"Diarization failed for {job_id}: {e}")
-        finally:
-            if local_file.exists(): os.remove(local_file)
+            raise e

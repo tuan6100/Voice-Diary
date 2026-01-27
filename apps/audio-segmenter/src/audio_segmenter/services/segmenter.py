@@ -28,12 +28,9 @@ class AudioSegmenterService:
             if job_dir.exists(): shutil.rmtree(job_dir)
             job_dir.mkdir(parents=True, exist_ok=True)
             output_chunks_dir.mkdir(parents=True, exist_ok=True)
-
             logger.info(f"Starting Segmentation Job: {job_id}")
-
-            # FIX: Thêm await và str(path)
-            await self.s3.download_file(command.input_path, str(input_file))
-
+            if not input_file.exists():
+                await self.s3.download_file(command.input_path, str(input_file))
             chunks_meta = split_audio_smart(str(input_file), str(output_chunks_dir))
             logger.info(f"Split into {len(chunks_meta)} chunks.")
 
@@ -59,6 +56,7 @@ class AudioSegmenterService:
 
         except Exception as e:
             logger.error(f"Job {job_id} Failed: {e}")
+            raise e
 
         finally:
             if job_dir.exists(): shutil.rmtree(job_dir)

@@ -86,7 +86,7 @@ class S3Client:
             return await asyncio.to_thread(_read)
         except ClientError as e:
             logger.warning(f"Could not read JSON at {object_key}: {e}")
-            return None
+            raise e
 
     async def delete_folder(self, prefix: str):
         try:

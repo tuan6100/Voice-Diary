@@ -43,6 +43,7 @@ class AudioProcessorService:
 
         except Exception as e:
             logger.error(f"Job {job_id} Failed: {e}")
+            raise e
 
         finally:
             if local_input.exists(): os.remove(local_input)

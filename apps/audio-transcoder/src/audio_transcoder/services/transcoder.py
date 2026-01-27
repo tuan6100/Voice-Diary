@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import logging
@@ -33,14 +34,9 @@ class AudioTranscoderService:
             if job_dir.exists(): shutil.rmtree(job_dir)
             job_dir.mkdir(parents=True, exist_ok=True)
             output_hls_dir.mkdir(parents=True, exist_ok=True)
-
             logger.info(f"Transcoding Job {job_id}...")
-
-            # FIX: Thêm await
             await self.s3.download_file(command.input_path, str(input_file))
-
-            generate_hls_and_waveform(str(input_file), str(output_hls_dir))
-
+            await asyncio.to_thread(generate_hls_and_waveform, str(input_file), str(output_hls_dir))
             s3_base_path = f"hls/{job_id}"
 
             for filename in os.listdir(output_hls_dir):
@@ -48,7 +44,6 @@ class AudioTranscoderService:
                 s3_key = f"{s3_base_path}/{filename}"
 
                 if os.path.isfile(local_path):
-                    # FIX: Thêm await
                     await self.s3.upload_file(local_path, s3_key)
 
             playlist_path = f"{s3_base_path}/playlist.m3u8"
@@ -63,6 +58,7 @@ class AudioTranscoderService:
 
         except Exception as e:
             logger.error(f"Transcode failed for {job_id}: {e}")
+            raise e
 
         finally:
             if job_dir.exists(): shutil.rmtree(job_dir)

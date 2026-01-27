@@ -27,7 +27,8 @@ class LanguageDetectorService:
 
         try:
             logger.info(f"Detecting language for Job {command.job_id} Seg {command.index}...")
-            await self.s3.download_file(command.input_path, local_input_str)
+            if not local_input.exists():
+                await self.s3.download_file(command.input_path, local_input_str)
 
             def _run_detect():
                 engine = VoxLinguaEngine.get_instance()
@@ -48,5 +49,6 @@ class LanguageDetectorService:
 
         except Exception as e:
             logger.error(f"LangDetect failed: {e}")
+            raise e
         finally:
             if local_input.exists(): os.remove(local_input)

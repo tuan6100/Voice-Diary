@@ -39,15 +39,12 @@ class WorkflowOrchestrator:
     async def handle_file_uploaded(self, event: dict):
         data = FileUploadedEvent(**event)
         job_id = data.job_id
-
-        # Nếu job đã init rồi thì không init lại (Idempotency)
         if await self.state.get_job_status(job_id):
             logger.info(f"Job {job_id} already exists. Resuming...")
         else:
             logger.info(f"Started flow for Job {job_id}")
             await self.state.init_job(job_id, data.user_id)
 
-        # Trigger Preprocess
         if not await self._is_step_completed(job_id, "preprocess"):
             await self.state.update_progress(job_id, JobStatus.PREPROCESSING, 5, "Cleaning audio...")
             cmd = PreprocessCommand(job_id=job_id, input_path=data.storage_path)
@@ -86,6 +83,30 @@ class WorkflowOrchestrator:
             await self.producer.publish("audio_ops", "cmd.enhance", cmd)
         await self.state.update_progress(job_id, JobStatus.PROCESSING, 30, f"Processing {total_segments} chunks...")
 
+    async def handle_diarization_done(self, event: dict):
+        try:
+            data = DiarizationCompletedEvent(**event)
+            job_id = data.job_id
+            s3_key = f"analysis/{job_id}/diarization.json"
+            diar_content = json.dumps([s.model_dump() for s in data.speaker_segments], ensure_ascii=False)
+            with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp:
+                tmp.write(diar_content)
+                tmp_path = tmp.name
+            await self.s3.upload_file(tmp_path, s3_key)
+            os.remove(tmp_path)
+            await self._mark_step_completed(job_id, "diarization")
+            await self._check_finish_and_trigger_post(job_id)
+        except Exception as e:
+            logger.error(f"Error in handle_diarization_done: {e}")
+
+    async def handle_transcode_done(self, event: dict):
+        try:
+            data = TranscodeCompletedEvent(**event)
+            await self._mark_step_completed(data.job_id, "transcode")
+            await self._check_finish_and_trigger_post(data.job_id)
+        except Exception as e:
+            logger.error(f"Error in handle_transcode_done: {e}")
+
     async def handle_enhancement_done(self, event: dict):
         try:
             data = EnhancementCompletedEvent(**event)
@@ -122,14 +143,13 @@ class WorkflowOrchestrator:
             logger.debug(f"Received Recognition Event: {event}")
             data = RecognitionCompletedEvent(**event)
             job_id = data.job_id
-            segment_result = {
+            segment_meta = {
                 "index": data.index,
-                "text": data.text,
-                "start": data.start_ms / 1000.0,
-                "end": data.end_ms / 1000.0,
-                "confidence": data.confidence
+                "start_ms": data.start_ms,
+                "end_ms": data.end_ms,
+                "transcript_s3_path": data.transcript_s3_path
             }
-            await self.state.redis.rpush(f"job:{job_id}:transcripts", json.dumps(segment_result))
+            await self.state.redis.rpush(f"job:{job_id}:transcripts", json.dumps(segment_meta))
             completed_count = await self.state.redis.hincrby(f"job:{job_id}:cnt", "done", 1)
             total_count_str = await self.state.redis.hget(f"job:{job_id}:cnt", "total")
             total_count = int(total_count_str) if total_count_str else 9999
@@ -140,52 +160,27 @@ class WorkflowOrchestrator:
             if completed_count >= total_count:
                 await self._mark_step_completed(job_id, "recognition_all")
                 await self._check_finish_and_trigger_post(job_id)
-
         except Exception as e:
-            logger.error(f"Error in handle_recognition_done: {e}. Payload: {event}")
-
-    async def handle_diarization_done(self, event: dict):
-        try:
-            data = DiarizationCompletedEvent(**event)
-            job_id = data.job_id
-            s3_key = f"analysis/{job_id}/diarization.json"
-            diar_content = json.dumps([s.model_dump() for s in data.speaker_segments], ensure_ascii=False)
-            with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp:
-                tmp.write(diar_content)
-                tmp_path = tmp.name
-            await self.s3.upload_file(tmp_path, s3_key)
-            os.remove(tmp_path)
-            await self._mark_step_completed(job_id, "diarization")
-            await self._check_finish_and_trigger_post(job_id)
-        except Exception as e:
-            logger.error(f"Error in handle_diarization_done: {e}")
-
-    async def handle_transcode_done(self, event: dict):
-        try:
-            data = TranscodeCompletedEvent(**event)
-            await self._mark_step_completed(data.job_id, "transcode")
-            await self._check_finish_and_trigger_post(data.job_id)
-        except Exception as e:
-            logger.error(f"Error in handle_transcode_done: {e}")
+            logger.error(f"Error in handle_recognition_done: {e}")
 
     async def _check_finish_and_trigger_post(self, job_id: str):
-        steps = await self.state.redis.hgetall(f"job:{job_id}:steps")
-        is_recog_done = steps.get("recognition_all") == "1"
-        is_diar_done = steps.get("diarization") == "1"
-        is_trans_done = steps.get("transcode") == "1"
-        is_already_triggered = steps.get("postprocess_triggered") == "1"
+        is_recog_done = await self._is_step_completed(job_id, "recognition_all")
+        is_diar_done = await self._is_step_completed(job_id, "diarization")
+        is_trans_done = await self._is_step_completed(job_id, "transcode")
+        is_already_triggered = await self._is_step_completed(job_id, "postprocess_triggered")
         if is_recog_done and is_diar_done and is_trans_done and not is_already_triggered:
-            logger.info(f"Job {job_id}: All inputs ready. Triggering Post-Process.")
+            logger.info(f"Job {job_id}: All inputs ready. Preparing Manifest for PostProcess...")
             await self._mark_step_completed(job_id, "postprocess_triggered")
-            raw_transcripts = await self.state.redis.lrange(f"job:{job_id}:transcripts", 0, -1)
-            parsed_transcripts = [json.loads(x) for x in raw_transcripts]
-            parsed_transcripts.sort(key=lambda x: x['start'])
-            transcript_s3_key = f"analysis/{job_id}/transcript.json"
+            raw_meta = await self.state.redis.lrange(f"job:{job_id}:transcripts", 0, -1)
+            chunks_meta = [json.loads(x) for x in raw_meta]
+            chunks_meta.sort(key=lambda x: x['start_ms'])
+            manifest_s3_key = f"analysis/{job_id}/segments_manifest.json"
             with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp:
-                json.dump(parsed_transcripts, tmp, ensure_ascii=False)
+                json.dump(chunks_meta, tmp, ensure_ascii=False)
                 tmp_path = tmp.name
-            await self.s3.upload_file(tmp_path, transcript_s3_key)
+            await self.s3.upload_file(tmp_path, manifest_s3_key)
             os.remove(tmp_path)
+            logger.info(f"Job {job_id}: Manifest uploaded to {manifest_s3_key}")
             cmd = PostProcessCommand(job_id=job_id)
             await self.producer.publish("audio_ops", "cmd.postprocess", cmd)
             await self.state.update_progress(job_id, JobStatus.POST_PROCESSING, 80, "Finalizing...")

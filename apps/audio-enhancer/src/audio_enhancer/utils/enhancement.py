@@ -1,5 +1,4 @@
 import os
-
 import torch
 import torchaudio
 import logging
@@ -9,9 +8,7 @@ from speechbrain.inference.separation import SepformerSeparation
 
 logger = logging.getLogger(__name__)
 
-# 🔒 Semaphore để bảo vệ GPU
 _GPU_SEMAPHORE = asyncio.Semaphore(1)
-
 
 class AudioEnhancerModel:
     _model = None
@@ -30,13 +27,23 @@ class AudioEnhancerModel:
         return cls._model
 
 
+def _blocking_inference(model, input_path: str, output_path: str):
+    try:
+        est_sources = model.separate_file(path=input_path)
+        enhanced_audio = est_sources[:, :, 0].detach().cpu()
+        torchaudio.save(output_path, enhanced_audio, 16000)
+        return True
+    except Exception as e:
+        logger.error(f"Inference error: {e}")
+        raise e
+
+
 async def denoise_audio(input_path: str, output_path: str):
+    input_path = str(Path(input_path).resolve()).replace("\\", "/")
+    output_path = str(Path(output_path).resolve()).replace("\\", "/")
     async with _GPU_SEMAPHORE:
         model = AudioEnhancerModel.get_model()
-        input_path = str(Path(input_path).resolve()).replace("\\", "/")
-        output_path = str(Path(output_path).resolve()).replace("\\", "/")
-        logger.debug(f"Denoising {input_path}")
-        with torch.no_grad():
-            est_sources = model.separate_file(path=input_path)
-            enhanced_audio = est_sources[:, :, 0].detach().cpu()
-            torchaudio.save(output_path, enhanced_audio, 16000)
+        logger.debug(f"Starting Denoise (Threaded): {input_path}")
+        await asyncio.to_thread(_blocking_inference, model, input_path, output_path)
+        if not os.path.exists(output_path):
+            raise RuntimeError(f"Output file not found after inference: {output_path}")

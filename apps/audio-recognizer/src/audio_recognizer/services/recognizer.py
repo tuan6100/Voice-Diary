@@ -34,7 +34,8 @@ class AudioRecognizerService:
 
         try:
             logger.info(f"Processing Recognizer Job {job_id} - Chunk {index}")
-            await self.s3.download_file(command.input_path, local_input_str)
+            if not local_input.exists():
+                await self.s3.download_file(command.input_path, local_input_str)
             def run_whisper_blocking():
                 engine = WhisperEngine.get_instance()
                 return engine.transcribe_file(local_input_str, language)
@@ -58,6 +59,7 @@ class AudioRecognizerService:
 
         except Exception as e:
             logger.error(f"Recognition failed for {job_id}_{index}: {e}")
+            raise e
 
         finally:
             if local_input.exists(): os.remove(local_input)

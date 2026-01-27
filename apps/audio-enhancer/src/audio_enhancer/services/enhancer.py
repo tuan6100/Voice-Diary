@@ -1,4 +1,4 @@
-import os
+import asyncio
 import logging
 from pathlib import Path
 
@@ -31,11 +31,12 @@ class AudioEnhancerService:
 
         try:
             logger.info(f"Enhancing Job {job_id} - Seg {segment_index}")
-            await self.s3.download_file(s3_input_path, local_input_str)
+            if not local_input.exists():
+                await self.s3.download_file(s3_input_path, local_input_str)
             if not local_input.exists() or local_input.stat().st_size == 0:
                 raise FileNotFoundError(f"Downloaded file invalid: {local_input_str}")
 
-            quality_info = check_audio_quality(local_input_str)
+            quality_info = await asyncio.to_thread(check_audio_quality, local_input_str)
             logger.info(
                 f"Seg {segment_index} Quality: "
                 f"{quality_info['level']} (SNR: {quality_info['snr']:.2f})"
@@ -48,6 +49,7 @@ class AudioEnhancerService:
                 clean_s3_key = s3_input_path.replace("segments/", "enhanced/")
                 await self.s3.upload_file(local_output_str, clean_s3_key)
                 final_s3_path = clean_s3_key
+                logger.info(f"Segment {segment_index} denoised")
             else:
                 logger.info("Audio is clean enough. Skipping denoise.")
 
@@ -67,8 +69,9 @@ class AudioEnhancerService:
                 event
             )
 
-        except Exception:
+        except Exception as e:
             logger.exception(f"Error enhancing segment {segment_index}")
+            raise e
 
         finally:
             self._safe_cleanup(local_input)

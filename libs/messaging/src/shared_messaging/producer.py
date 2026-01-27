@@ -16,9 +16,11 @@ class RabbitMQProducer:
         self.exchanges = {}
 
     async def connect(self):
+        logger.info("Connecting to RabbitMQ...")
         self.connection = await aio_pika.connect_robust(self.amqp_url, heartbeat=300)
         self.channel = await self.connection.channel()
-        logger.info("RabbitMQ Producer connected")
+        self.exchanges = {}
+        logger.info("RabbitMQ Producer connected & Exchange cache cleared")
 
     async def close(self):
         if self.connection:
@@ -30,7 +32,10 @@ class RabbitMQProducer:
             await self.connect()
 
         if not self.channel or self.channel.is_closed:
+            logger.warning("Channel lost, recreating...")
             self.channel = await self.connection.channel()
+            self.exchanges = {}
+
         if exchange_name not in self.exchanges:
             exchange = await self.channel.declare_exchange(
                 exchange_name,
