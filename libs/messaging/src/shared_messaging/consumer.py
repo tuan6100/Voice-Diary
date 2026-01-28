@@ -77,11 +77,9 @@ class RabbitMQConsumer:
                     headers = dict(message.headers or {})
                     retry_count = int(headers.get("x-retry", 0))
 
-                    # Kiểm tra channel trước khi publish
                     if self.channel.is_closed:
                         logger.error(f"Channel is closed, reconnecting...")
                         await self.connect()
-                        # Re-declare exchanges sau khi reconnect
                         exchange = await self.channel.declare_exchange(
                             exchange_name,
                             type=aio_pika.ExchangeType.TOPIC,
@@ -122,7 +120,6 @@ class RabbitMQConsumer:
                     should_reject = True
 
             finally:
-                # Xử lý ack/reject bên ngoài context manager
                 try:
                     if should_ack:
                         await message.ack()
