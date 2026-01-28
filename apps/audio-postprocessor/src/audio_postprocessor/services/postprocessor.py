@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from datetime import datetime, timezone
 
-# Chỉ PostProcessor mới cần import thuật toán alignment
 from audio_postprocessor.utils.alignment import align_transcript_with_diarization
 from shared_messaging.producer import RabbitMQProducer
 from shared_storage.s3 import S3Client
@@ -28,14 +27,13 @@ class AudioPostProcessorService:
     async def handle_command(self, cmd_data: dict):
         job_id = cmd_data.get("job_id")
         logger.info(f"Starting Alignment & Post-processing for Job: {job_id}")
-
         local_final_json = self.temp_dir / f"{job_id}_final.json"
         local_final_txt = self.temp_dir / f"{job_id}_transcript.txt"
+        local_words_json = self.temp_dir / f"{job_id}_words_level.json"
 
         try:
             key_manifest = f"analysis/{job_id}/segments_manifest.json"
             chunks_meta = await self.s3.read_json(key_manifest)
-
             if not chunks_meta:
                 raise FileNotFoundError(f"Manifest not found at {key_manifest}")
             full_word_list = []
@@ -49,6 +47,13 @@ class AudioPostProcessorService:
                     word['start'] += chunk_start_sec
                     word['end'] += chunk_start_sec
                     full_word_list.append(word)
+            key_words_level = f"results/{job_id}/words_level.json"
+            local_words_str = str(local_words_json)
+            with open(local_words_str, 'w', encoding='utf-8') as f:
+                json.dump(full_word_list, f, ensure_ascii=False, indent=2)
+
+            await self.s3.upload_file(local_words_str, key_words_level)
+            logger.info(f"Uploaded words-level transcript to {key_words_level}")
             key_diarization = f"analysis/{job_id}/diarization.json"
             diarization_data = await self.s3.read_json(key_diarization)
             if not diarization_data:
@@ -57,7 +62,6 @@ class AudioPostProcessorService:
             else:
                 raw_diarization = diarization_data if isinstance(diarization_data, list) else diarization_data.get(
                     'segments', [])
-
             logger.info("Running alignment algorithm...")
             aligned_segments = align_transcript_with_diarization(full_word_list, raw_diarization)
             txt_lines = []
@@ -69,10 +73,8 @@ class AudioPostProcessorService:
                 text = seg['text']
                 txt_lines.append(f"[{start_str}] {speaker}: {text}")
             full_text_content = "\n".join(txt_lines)
-
             key_final_json = f"results/{job_id}/metadata.json"
             key_final_txt = f"results/{job_id}/transcript.txt"
-
             final_output = {
                 "job_id": job_id,
                 "status": "COMPLETED",
@@ -80,7 +82,8 @@ class AudioPostProcessorService:
                 "assets": {
                     "original": f"raw/{job_id}/input.wav",
                     "hls": f"hls/{job_id}/playlist.m3u8",
-                    "text_file": key_final_txt
+                    "text_file": key_final_txt,
+                    "words_level_file": key_words_level
                 },
                 "results": {
                     "transcript_aligned": aligned_segments,
@@ -107,5 +110,5 @@ class AudioPostProcessorService:
             raise e
 
         finally:
-            if local_final_json.exists(): os.remove(local_final_json)
-            if local_final_txt.exists(): os.remove(local_final_txt)
+            for p in [local_final_json, local_final_txt, local_words_json]:
+                if p.exists(): os.remove(p)

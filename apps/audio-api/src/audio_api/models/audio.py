@@ -22,6 +22,7 @@ class AudioMetadata(BaseModel):
     hls_url: Optional[str] = None
     duration: float = 0.0
     file_size: int = 0
+    google_doc_id: Optional[str] = None
 
 
 class Audio(Document):
