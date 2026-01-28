@@ -60,3 +60,13 @@ class JobCompletedEvent(BaseModel):
     metadata_path: str
     status: str
     error: Optional[str] = None
+
+
+class JobFailedEvent(BaseModel):
+    job_id: str
+    reason: str
+
+
+class JobCancelledEvent(BaseModel):
+    job_id: str
+    reason: str

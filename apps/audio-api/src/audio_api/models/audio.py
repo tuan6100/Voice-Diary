@@ -10,6 +10,7 @@ class ProcessingStatus(str, Enum):
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 class TranscriptSegment(BaseModel):
     start: float

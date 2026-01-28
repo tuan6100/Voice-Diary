@@ -16,6 +16,8 @@ dependencies = [
     "Authlib",
     "httpx",
     "Starlette",
+    "sse-starlette",
+    "itsdangerous",
     "google-auth-oauthlib",
     "google-api-python-client"
 ]

@@ -16,7 +16,7 @@ class RabbitMQProducer:
         self.exchanges = {}
 
     async def connect(self):
-        logger.info("Connecting to RabbitMQ...")
+        logger.info("Connecting to RabbitMQ at %s", self.amqp_url)
         self.connection = await aio_pika.connect_robust(self.amqp_url, heartbeat=300)
         self.channel = await self.connection.channel()
         self.exchanges = {}

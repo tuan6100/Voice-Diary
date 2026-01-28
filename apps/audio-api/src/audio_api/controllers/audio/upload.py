@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from redis.asyncio import Redis
+import json
 
-from audio_api.cores.injectable import get_upload_service, get_current_user_id, get_redis
+from fastapi import APIRouter, Depends, HTTPException, Request
+from redis.asyncio import Redis
+from sse_starlette import EventSourceResponse
+
+from audio_api.cores.injectable import get_upload_service, get_current_user_id, get_redis, get_producer
 from audio_api.dtos.request.upload import UploadInitRequest
 from audio_api.dtos.response.upload import UploadInitResponse
 from audio_api.services.upload_flow import UploadFlowService
+from shared_messaging.producer import RabbitMQProducer
 
 router = APIRouter()
 
@@ -42,6 +46,35 @@ async def confirm_upload(
     result = await service.trigger_processing(user_id, job_id)
     return result
 
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(
+        job_id: str,
+        user_id: str = Depends(get_current_user_id),
+        redis: Redis = Depends(get_redis),
+        producer: RabbitMQProducer = Depends(get_producer)
+):
+    redis_key = f"job:{job_id}"
+    job_data = await redis.hgetall(redis_key)
+    if not job_data:
+        raise HTTPException(404, "Job not found")
+    job_owner = job_data.get(b"user_id", job_data.get("user_id"))
+    if isinstance(job_owner, bytes): job_owner = job_owner.decode()
+    if job_owner != user_id:
+        raise HTTPException(403, "Permission denied")
+    current_status = job_data.get(b"status", job_data.get("status"))
+    if isinstance(current_status, bytes): current_status = current_status.decode()
+    if current_status in ["COMPLETED", "FAILED", "CANCELLED"]:
+        raise HTTPException(400, f"Cannot cancel job in status {current_status}")
+    await redis.hset(f"job:{job_id}", "status", "CANCELLING")
+    cancel_cmd = {"job_id": job_id, "reason": "User request"}
+    await producer.publish(
+        exchange_name="audio_ops",
+        routing_key="cmd.cancel",
+        message=cancel_cmd
+    )
+    return {"status": "success", "message": "Cancellation request sent"}
+
 @router.get("/progress/{job_id}")
 async def get_upload_status(
         job_id: str,
@@ -66,3 +99,45 @@ async def get_upload_status(
         "progress": int(job_data.get("progress", 0)),
         "message": job_data.get("message", "")
     }
+
+
+@router.get("/progress/{job_id}/stream")
+async def stream_progress(
+        job_id: str,
+        request: Request,
+        redis: Redis = Depends(get_redis)
+):
+    """
+    Client sẽ connect vào đây để lắng nghe sự kiện.
+    """
+    async def event_generator():
+        pubsub = redis.pubsub()
+        channel_name = f"job_progress:{job_id}"
+        await pubsub.subscribe(channel_name)
+        try:
+            current_data = await redis.hgetall(f"job:{job_id}")
+            if current_data:
+                decoded = {k.decode(): v.decode() for k, v in current_data.items()}
+                yield {
+                    "event": "update",
+                    "data": json.dumps(decoded)
+                }
+            async for message in pubsub.listen():
+                if await request.is_disconnected():
+                    break
+
+                if message["type"] == "message":
+                    data = message["data"].decode("utf-8")
+                    yield {
+                        "event": "update",
+                        "data": data
+                    }
+                    parsed = json.loads(data)
+                    if parsed.get("status") in ["COMPLETED", "FAILED"]:
+                        yield {"event": "close", "data": "Stream closed"}
+                        break
+        except Exception as e:
+            yield {"event": "error", "data": str(e)}
+        finally:
+            await pubsub.unsubscribe(channel_name)
+    return EventSourceResponse(event_generator())

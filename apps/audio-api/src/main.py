@@ -48,6 +48,16 @@ async def lifespan(app: FastAPI):
         routing_key="job.finalized",
         handler=consumer_service.handle_job_finalized
     )
+    await consumer.subscribe(
+        exchange_name="audio_events",
+        routing_key="event.job_failed",
+        handler=consumer_service.handle_job_failed
+    )
+    await consumer.subscribe(
+        exchange_name="audio_events",
+        routing_key="event.job_cancelled",
+        handler=consumer_service.handle_job_cancelled
+    )
     logger.info("Background Consumer Listening...")
 
     yield

@@ -36,6 +36,13 @@ class WorkflowOrchestrator:
     async def _mark_step_completed(self, job_id: str, step_key: str):
         await self.state.redis.hset(f"job:{job_id}:steps", step_key, "1")
 
+    async def _is_cancelled(self, job_id: str) -> bool:
+        status = await self.state.get_job_status(job_id)
+        if status == "CANCELLED":
+            logger.warning(f"Job {job_id} was CANCELLED. Stopping workflow.")
+            return True
+        return False
+
     async def handle_file_uploaded(self, event: dict):
         data = FileUploadedEvent(**event)
         job_id = data.job_id
@@ -52,6 +59,7 @@ class WorkflowOrchestrator:
 
     async def handle_preprocess_done(self, event: dict):
         data = PreprocessCompletedEvent(**event)
+        if await self._is_cancelled(data.job_id): return
         await self._mark_step_completed(data.job_id, "preprocess")
 
         if not await self._is_step_completed(data.job_id, "segmenting_trigger"):
@@ -64,6 +72,7 @@ class WorkflowOrchestrator:
 
     async def handle_segment_done(self, event: dict):
         data = SegmentCompletedEvent(**event)
+        if await self._is_cancelled(data.job_id): return
         job_id = data.job_id
         total_segments = len(data.segments)
         await self.state.redis.hset(f"job:{job_id}:cnt", "total", str(total_segments))
@@ -86,6 +95,7 @@ class WorkflowOrchestrator:
     async def handle_diarization_done(self, event: dict):
         try:
             data = DiarizationCompletedEvent(**event)
+            if await self._is_cancelled(data.job_id): return
             job_id = data.job_id
             s3_key = f"analysis/{job_id}/diarization.json"
             diar_content = json.dumps([s.model_dump() for s in data.speaker_segments], ensure_ascii=False)
@@ -102,6 +112,7 @@ class WorkflowOrchestrator:
     async def handle_transcode_done(self, event: dict):
         try:
             data = TranscodeCompletedEvent(**event)
+            if await self._is_cancelled(data.job_id): return
             await self._mark_step_completed(data.job_id, "transcode")
             await self._check_finish_and_trigger_post(data.job_id)
         except Exception as e:
@@ -110,6 +121,7 @@ class WorkflowOrchestrator:
     async def handle_enhancement_done(self, event: dict):
         try:
             data = EnhancementCompletedEvent(**event)
+            if await self._is_cancelled(data.job_id): return
             logger.info(f"Enhance done {data.job_id}:{data.index}. Sending to LangDetect.")
             cmd_detect = LanguageDetectCommand(
                 job_id=data.job_id,
@@ -125,6 +137,7 @@ class WorkflowOrchestrator:
     async def handle_lang_detect_done(self, event: dict):
         try:
             data = LanguageDetectionCompletedEvent(**event)
+            if await self._is_cancelled(data.job_id): return
             logger.info(f"LangDetect done {data.job_id}:{data.index} ({data.language}). Sending to Recognize.")
             cmd_recog = RecognizeCommand(
                 job_id=data.job_id,
@@ -142,6 +155,7 @@ class WorkflowOrchestrator:
         try:
             logger.debug(f"Received Recognition Event: {event}")
             data = RecognitionCompletedEvent(**event)
+            if await self._is_cancelled(data.job_id): return
             job_id = data.job_id
             segment_meta = {
                 "index": data.index,
@@ -164,6 +178,7 @@ class WorkflowOrchestrator:
             logger.error(f"Error in handle_recognition_done: {e}")
 
     async def _check_finish_and_trigger_post(self, job_id: str):
+        if await self._is_cancelled(job_id): return
         is_recog_done = await self._is_step_completed(job_id, "recognition_all")
         is_diar_done = await self._is_step_completed(job_id, "diarization")
         is_trans_done = await self._is_step_completed(job_id, "transcode")
@@ -198,6 +213,5 @@ class WorkflowOrchestrator:
             if cleanup_tasks:
                 await asyncio.gather(*cleanup_tasks)
                 logger.info(f"Cleaned up folders: {settings.CLEANUP_TARGETS}")
-
         except Exception as e:
             logger.error(f"Error in handle_job_finalized: {e}")

@@ -11,10 +11,11 @@ class JobStatus(str, Enum):
     SEGMENTING = "SEGMENTING"
     RECOGNIZING = "RECOGNIZING"
     TRANSCODING = "TRANSCODING"
-    PROCESSING = "PROCESSING"  # used during bulk processing of segments
-    POST_PROCESSING = "POST_PROCESSING"  # used after all inputs ready
+    PROCESSING = "PROCESSING"
+    POST_PROCESSING = "POST_PROCESSING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 class StateManager:
     def __init__(self, redis: Redis):
@@ -33,20 +34,24 @@ class StateManager:
         await self.redis.expire(key, self.ttl)
 
     async def update_progress(self, job_id: str, status: JobStatus, progress: int, message: str = ""):
-        key = f"job:{job_id}"
-        data = {
-            "status": status.value,
+        await self.redis.hmset(f"job:{job_id}", {
+            "status": status,
+            "progress": str(progress),
+            "message": message
+        })
+        channel_name = f"job_progress:{job_id}"
+        payload = json.dumps({
+            "job_id": job_id,
+            "status": status,
             "progress": progress,
             "message": message
-        }
-        await self.redis.hset(key, mapping=data)
+        })
+        await self.redis.publish(channel_name, payload)
         logger.info(f"Job {job_id}: {status} - {progress}%")
 
     async def get_job_status(self, job_id: str) -> str | None:
-        """Return the current job status string or None if job key missing."""
         key = f"job:{job_id}"
         status = await self.redis.hget(key, "status")
         if status is None:
             return None
-        # redis returns bytes or str depending on decoder; ensure str
         return status.decode() if isinstance(status, (bytes, bytearray)) else status

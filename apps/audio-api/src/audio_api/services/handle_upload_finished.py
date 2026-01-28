@@ -1,5 +1,5 @@
 import logging
-from shared_schemas.events import JobCompletedEvent
+from shared_schemas.events import JobCompletedEvent, JobFailedEvent, JobCancelledEvent
 from shared_storage.s3 import S3Client
 from audio_api.models.audio import Audio, ProcessingStatus, AudioMetadata, TranscriptSegment
 from audio_api.models.post import Post
@@ -44,6 +44,28 @@ class HandleUploadFinishedService:
 
         except Exception as e:
             logger.error(f"Failed to sync job {event.job_id}: {e}", exc_info=True)
+
+    async def handle_job_failed(self, event_data: dict):
+        event = JobFailedEvent(**event_data)
+        try:
+            logger.info(f"Handling failed job: {event.job_id}")
+            audio = await Audio.find_one(Audio.job_id == event.job_id)
+            if audio:
+                audio.status = ProcessingStatus.FAILED
+                await audio.save()
+        except Exception as e:
+            logger.error(f"Failed to handle JobFailedEvent for {event.job_id}: {e}")
+
+    async def handle_job_cancelled(self, event_data: dict):
+        event = JobCancelledEvent(**event_data)
+        try:
+            logger.info(f"Handling cancelled job: {event.job_id}")
+            audio = await Audio.find_one(Audio.job_id == event.job_id)
+            if audio:
+                audio.status = ProcessingStatus.CANCELLED
+                await audio.save()
+        except Exception as e:
+            logger.error(f"Failed to handle JobCancelledEvent for {event.job_id}: {e}")
 
     async def _add_to_default_album(self, user_id: str, item_id: str):
         album = await Album.find_one(Album.user_id == user_id, Album.title == "My Recordings")

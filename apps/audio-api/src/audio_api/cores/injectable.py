@@ -31,7 +31,7 @@ async def get_redis() -> AsyncGenerator[Redis, Any]:
 _Producer: RabbitMQProducer | None = None
 
 
-def get_Producer() -> RabbitMQProducer:
+def get_producer() -> RabbitMQProducer:
     if _Producer is None:
         raise RuntimeError("Producer not initialized")
     return _Producer
@@ -50,6 +50,6 @@ async def get_current_user_id(authorization: str = Header(None)) -> str:
 
 def get_upload_service(
         s3: S3Client = Depends(get_s3_client),
-        pub: RabbitMQProducer = Depends(get_Producer)
+        pub: RabbitMQProducer = Depends(get_producer)
 ) -> UploadFlowService:
     return UploadFlowService(s3, pub)
