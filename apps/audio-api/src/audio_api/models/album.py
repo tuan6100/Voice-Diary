@@ -9,10 +9,7 @@ class Album(Document):
     title: str
     description: Optional[str] = None
     cover_url: Optional[str] = None
-
-
     post_ids: List[str] = []
-
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
