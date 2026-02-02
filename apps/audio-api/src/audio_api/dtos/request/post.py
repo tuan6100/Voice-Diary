@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from audio_api.cores.model import CamelModel
 
@@ -15,5 +15,11 @@ class SearchFilter(CamelModel):
     from_date: Optional[datetime] = None
     to_date: Optional[datetime] = None
     sort_by: str = "newest"
+
+class UpdatePostRequest(CamelModel):
+    title: str
+    text_content: str
+    mood: Optional[str] = None
+    hashtags: List[str] = []
 
 

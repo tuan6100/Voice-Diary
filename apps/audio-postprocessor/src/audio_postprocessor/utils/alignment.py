@@ -8,6 +8,7 @@ def calculate_overlap(seg1_start, seg1_end, seg2_start, seg2_end):
     overlap_end = min(seg1_end, seg2_end)
     return max(0, overlap_end - overlap_start)
 
+
 def get_best_speaker_for_word(word, diarization_segments):
     w_start = word.get('start')
     w_end = word.get('end')
@@ -42,9 +43,35 @@ def get_best_speaker_for_word(word, diarization_segments):
             nearest_speaker = spk['speaker']
     return nearest_speaker
 
+
+def merge_consecutive_segments(segments: list, max_gap: float = 2.0) -> list:
+    if not segments:
+        return []
+
+    merged = []
+    current = segments[0].copy()
+
+    for i in range(1, len(segments)):
+        next_seg = segments[i]
+        time_gap = next_seg['start'] - current['end']
+        if next_seg['speaker'] == current['speaker'] and time_gap <= max_gap:
+            current['text'] = current['text'] + ' ' + next_seg['text']
+            current['end'] = next_seg['end']
+        else:
+            merged.append(current)
+            current = next_seg.copy()
+
+    # Thêm segment cuối cùng
+    merged.append(current)
+
+    return merged
+
+
 def align_transcript_with_diarization(
         word_segments: list,
-        diarization_segments: list
+        diarization_segments: list,
+        merge_same_speaker: bool = True,
+        max_gap: float = 2.0
 ) -> list:
     words_with_speaker = []
     sorted_diarization = sorted(diarization_segments, key=lambda x: x['start'])
@@ -62,8 +89,10 @@ def align_transcript_with_diarization(
             "end": w_end,
             "speaker": speaker
         })
+
     if not words_with_speaker:
         return []
+
     final_segments = []
     for diar_seg in sorted_diarization:
         segment_words = []
@@ -79,5 +108,8 @@ def align_transcript_with_diarization(
                 "end": segment_words[-1]['end'],
                 "text": " ".join([w['word'] for w in segment_words]).strip()
             })
+
+    if merge_same_speaker and final_segments:
+        final_segments = merge_consecutive_segments(final_segments, max_gap)
 
     return final_segments

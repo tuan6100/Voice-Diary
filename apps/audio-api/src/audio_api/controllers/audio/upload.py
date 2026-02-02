@@ -7,6 +7,8 @@ from sse_starlette import EventSourceResponse
 from audio_api.cores.injectable import get_upload_service, get_current_user_id, get_redis, get_producer
 from audio_api.dtos.request.upload import UploadInitRequest, UploadConfirmRequest
 from audio_api.dtos.response.upload import UploadInitResponse
+from audio_api.models.audio import Audio
+from audio_api.models.post import Post
 from audio_api.services.upload_flow import UploadFlowService
 from shared_messaging.producer import RabbitMQProducer
 
@@ -73,6 +75,10 @@ async def cancel_job(
         routing_key="cmd.cancel",
         message=cancel_cmd
     )
+    audio = await Audio.find_one(Audio.job_id == job_id)
+    if audio:
+        await Post.find_one(Post.audio_id == str(audio.id)).delete()
+        await audio.delete()
     return {"status": "success", "message": "Cancellation request sent"}
 
 @router.get("/progress/{job_id}")

@@ -32,7 +32,7 @@ class IncreaseViewResponse(CamelModel):
     status: str
 
 
-def build_post_response(post: Post, audio: Optional[Audio]) -> PostResponse:
+def build_post_response(post: Post, audio: Optional[Audio], is_detail: bool = False) -> PostResponse:
     duration = 0.0
     transcript_text = ""
     file_size = 0
@@ -43,10 +43,18 @@ def build_post_response(post: Post, audio: Optional[Audio]) -> PostResponse:
             duration = audio.audio_meta.duration or 0.0
             file_size = getattr(audio.audio_meta, "size", 0)
         if audio.transcript and len(audio.transcript) > 0:
-            segments = [seg.text for seg in audio.transcript[:3]]
-            transcript_text = " ".join(segments)
-            if len(transcript_text) > 300:
-                transcript_text = transcript_text[:300] + "..."
+            if is_detail:
+                lines = []
+                for seg in audio.transcript:
+                    time_label = f"[{int(seg.start // 60):02d}:{int(seg.start % 60):02d}]"
+                    speaker_label = f"{seg.speaker}: " if seg.speaker else ""
+                    lines.append(f"{time_label} {speaker_label}{seg.text}")
+                transcript_text = "\n\n".join(lines)
+            else:
+                segments = [seg.text for seg in audio.transcript[:3]]
+                transcript_text = " ".join(segments)
+                if len(transcript_text) > 300:
+                    transcript_text = transcript_text[:300] + "..."
         if audio.audio_meta.hls_url:
             stream_url = f"{settings.S3_ENDPOINT}/{settings.S3_BUCKET_NAME}/{audio.audio_meta.hls_url}"
 

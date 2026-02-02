@@ -35,7 +35,7 @@ async def get_captions(audio_id: PydanticObjectId):
 
 
 @router.get("/{audio_id}/download")
-async def download_transcript(audio_id: PydanticObjectId, format: str = "txt"):
+async def download_transcript(audio_id: PydanticObjectId, format: str = "txt", is_detail: bool = False):
     audio = await Audio.get(audio_id)
     if not audio:
         raise HTTPException(404)
@@ -43,7 +43,7 @@ async def download_transcript(audio_id: PydanticObjectId, format: str = "txt"):
         content = generate_webvtt(audio.transcript)
         ext = "vtt"
     else:
-        content = generate_plain_text(audio.transcript)
+        content = generate_plain_text(audio.transcript, is_detail=is_detail)
         ext = "txt"
     return Response(
         content=content,

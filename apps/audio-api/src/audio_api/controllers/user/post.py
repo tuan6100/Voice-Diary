@@ -1,9 +1,12 @@
+import logging
 from typing import List, Optional
 
 from beanie import PydanticObjectId
 from beanie.operators import Text
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response, Depends
 
+from audio_api.cores.injectable import get_current_user_id
+from audio_api.dtos.request.post import UpdatePostRequest
 from audio_api.dtos.response.post import (
     ToggleLikeResponse,
     IncreaseViewResponse, PostResponse, build_post_response,
@@ -11,6 +14,8 @@ from audio_api.dtos.response.post import (
 from audio_api.models.audio import Audio
 from audio_api.models.post import Post
 from typing import List, Optional, Literal
+
+from audio_api.utils.transcript_parser import parse_transcript_from_text
 
 router = APIRouter()
 
@@ -20,7 +25,8 @@ async def get_feed(
         skip: int = 0,
         q: Optional[str] = None,
         hashtag: Optional[str] = None,
-        sort_by: Literal["newest", "popular"] = "newest"
+        sort_by: Literal["newest", "popular"] = "newest",
+        user_id: str = Depends(get_current_user_id)
 ):
     queries = []
     if q:
@@ -43,18 +49,42 @@ async def get_feed(
     return results
 
 
-@router.post("/{post_id}/like", response_model=ToggleLikeResponse)
-async def toggle_like(post_id: PydanticObjectId):
+@router.get("/{post_id}", response_model=PostResponse)
+async def get_post_detail(post_id: PydanticObjectId, user_id: str = Depends(get_current_user_id)):
+    logging.info("Requesting post detail for post_id: %s by user_id: %s", post_id, user_id)
     post = await Post.get(post_id)
     if not post:
-        raise HTTPException(404)
-    await post.inc({Post.likes_count: 1})
-    return ToggleLikeResponse(likes=post.likes_count)
+        raise HTTPException(404, "Post not found")
+    if str(post.user_id) != user_id:
+        raise HTTPException(403, "Access denied")
+    audio = None
+    if post.audio_id:
+        audio = await Audio.get(PydanticObjectId(post.audio_id))
+    return build_post_response(post, audio, is_detail=True)
 
 
-@router.post("/{post_id}/view", response_model=IncreaseViewResponse)
-async def increase_view(post_id: PydanticObjectId):
+async def update_post(
+        post_id: PydanticObjectId,
+        body: UpdatePostRequest,
+        user_id: str = Depends(get_current_user_id)
+):
     post = await Post.get(post_id)
-    if post:
-        await post.inc({Post.views_count: 1})
-    return IncreaseViewResponse(status="ok")
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if str(post.user_id) != user_id:
+        raise HTTPException(403, "Not authorized")
+    post.title = body.title
+    post.text_content = body.text_content
+    post.mood = body.mood
+    post.hashtags = body.hashtags
+    await post.save()
+    audio = None
+    if post.audio_id:
+        audio = await Audio.get(PydanticObjectId(post.audio_id))
+        if audio:
+            new_segments = parse_transcript_from_text(body.text_content)
+            if new_segments:
+                audio.transcript = new_segments
+                audio.caption = body.title
+                await audio.save()
+    return build_post_response(post, audio, is_detail=True)
