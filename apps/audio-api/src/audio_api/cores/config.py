@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     GOOGLE_CLIENT_ID: str = "GOOGLE_CLIENT_ID"
     GOOGLE_CLIENT_SECRET: str = "GOOGLE_CLIENT_SECRET"
+    GOOGLE_SCOPES: str = "email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents"
 
     class Config:
         env_file = ".env"

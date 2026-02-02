@@ -5,8 +5,8 @@ from pydantic import Field
 
 
 class Album(Document):
-    user_id: str
-    name: str
+    user_id: Indexed(str)
+    title: str
     description: Optional[str] = None
     cover_url: Optional[str] = None
     post_ids: List[str] = []

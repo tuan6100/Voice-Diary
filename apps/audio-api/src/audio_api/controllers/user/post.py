@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from beanie import PydanticObjectId
 from beanie.operators import Text
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from audio_api.dtos.response.post import (
     ToggleLikeResponse,
@@ -10,15 +10,9 @@ from audio_api.dtos.response.post import (
 )
 from audio_api.models.audio import Audio
 from audio_api.models.post import Post
+from typing import List, Optional, Literal
 
 router = APIRouter()
-
-# audio_api/controllers/post/post.py
-
-from typing import List, Optional, Literal  # Import Literal
-
-
-# ... các import khác giữ nguyên
 
 @router.get("/", response_model=List[PostResponse])
 async def get_feed(
@@ -33,11 +27,13 @@ async def get_feed(
         queries.append(Text(q))
     if hashtag:
         queries.append(Post.hashtags == hashtag)
-    sort_criteria = -Post.uploaded_at
+    sort_criteria = -Post.uploaded_date
     if sort_by == "popular":
         sort_criteria = -Post.views_count
     query_obj = Post.find(*queries).sort(sort_criteria).limit(limit).skip(skip)
     posts = await query_obj.to_list()
+    if not posts:
+        return Response(status_code=204)
     results = []
     for post in posts:
         audio = None

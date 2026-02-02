@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from beanie import PydanticObjectId
@@ -23,7 +24,7 @@ async def create_album(
         request: CreateAlbumRequest,
         user_id: str = Depends(get_current_user_id)
 ):
-    album = Album(user_id=user_id, title=request.title, post_ids=[])
+    album = Album(user_id=user_id, title=request.title)
     await album.insert()
     return album
 
@@ -33,7 +34,10 @@ async def get_my_albums(
         user_id: str = Depends(get_current_user_id)
 ):
     albums = await Album.find(Album.user_id == user_id).to_list()
-    return albums
+    return [{
+        "id": str(album.id),
+        "title": album.title,
+    } for album in albums]
 
 
 @router.get("/search", summary="3. Tìm kiếm album")
