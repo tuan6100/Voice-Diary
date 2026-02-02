@@ -21,7 +21,8 @@ dependencies = [
     "google-auth-oauthlib",
     "google-api-python-client",
     "bcrypt",
-    "python-docx"
+    "python-docx",
+    "reportlab"
 ]
 
 [tool.uv.sources]

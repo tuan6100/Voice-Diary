@@ -8,6 +8,8 @@ from starlette.responses import PlainTextResponse, StreamingResponse
 
 from audio_api.cores.injectable import get_redis, get_current_user_id, get_s3_client
 from audio_api.models.audio import Audio
+from audio_api.models.post import Post
+from audio_api.services.pdf_service import PdfService
 from audio_api.services.word_service import WordService
 from audio_api.utils.transcript_converter import generate_webvtt, generate_plain_text
 from shared_storage.s3 import S3Client
@@ -94,20 +96,46 @@ async def export_to_google_docs(
         raise HTTPException(500, f"Export failed: {str(e)}")
 
 
-@router.get("/{audio_id}/export/word")
-async def export_to_word(
-        audio_id: PydanticObjectId,
+# ...
+
+# [CẬP NHẬT] Endpoint PDF
+@router.get("/{source_id}/export/pdf")  # Đổi tên biến param thành source_id cho đúng nghĩa
+async def export_to_pdf(
+        source_id: PydanticObjectId,
         user_id: str = Depends(get_current_user_id)
 ):
-    audio = await Audio.get(audio_id)
-    if audio.user_id != user_id:
-        raise HTTPException(403, "You do not have permission to access this audio")
+    audio = await _resolve_audio(source_id)
+    if not audio:
+        raise HTTPException(404, "Audio not found (checked both Post and Audio IDs)")
+    try:
+        filename = f"{audio.caption or 'Transcript'}.pdf"
+        safe_filename = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in ' .-_']).rstrip()
+        file_stream = PdfService.create_transcript_pdf(
+            title=audio.caption or "Untitled Audio",
+            transcript=audio.transcript
+        )
+        headers = {
+            'Content-Disposition': f'attachment; filename="{safe_filename}"'
+        }
+        return StreamingResponse(
+            file_stream,
+            media_type="application/pdf",
+            headers=headers
+        )
+    except Exception as e:
+        raise HTTPException(500, f"PDF export failed: {str(e)}")
+
+
+@router.get("/{source_id}/export/word")
+async def export_to_word(
+        source_id: PydanticObjectId,
+        user_id: str = Depends(get_current_user_id)
+):
+    audio = await _resolve_audio(source_id)
     if not audio:
         raise HTTPException(404, "Audio not found")
-    if not audio.transcript:
-        raise HTTPException(400, "Audio has no transcript to export")
     try:
-        filename = f"Transcript - {audio.caption or 'Untitled'}.docx"
+        filename = f"{audio.caption or 'Transcript'}.docx"
         safe_filename = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in ' .-_']).rstrip()
         file_stream = WordService.create_transcript_docx(
             title=audio.caption or "Untitled Audio",
@@ -121,7 +149,6 @@ async def export_to_word(
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             headers=headers
         )
-
     except Exception as e:
         raise HTTPException(500, f"Word export failed: {str(e)}")
 
@@ -172,3 +199,10 @@ async def edit_transcript(
         raise he
     except Exception as e:
         raise HTTPException(500, f"Sync failed: {str(e)}")
+
+
+async def _resolve_audio(resource_id: PydanticObjectId) -> Audio:
+    post = await Post.get(resource_id)
+    if post:
+        return await Audio.get(PydanticObjectId(post.audio_id))
+    return await Audio.get(resource_id)

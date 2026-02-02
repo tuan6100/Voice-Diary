@@ -62,7 +62,7 @@ async def get_post_detail(post_id: PydanticObjectId, user_id: str = Depends(get_
         audio = await Audio.get(PydanticObjectId(post.audio_id))
     return build_post_response(post, audio, is_detail=True)
 
-
+@router.put("/{post_id}", response_model=PostResponse)
 async def update_post(
         post_id: PydanticObjectId,
         body: UpdatePostRequest,
@@ -74,7 +74,6 @@ async def update_post(
     if str(post.user_id) != user_id:
         raise HTTPException(403, "Not authorized")
     post.title = body.title
-    post.text_content = body.text_content
     post.mood = body.mood
     post.hashtags = body.hashtags
     await post.save()
@@ -82,9 +81,10 @@ async def update_post(
     if post.audio_id:
         audio = await Audio.get(PydanticObjectId(post.audio_id))
         if audio:
-            new_segments = parse_transcript_from_text(body.text_content)
-            if new_segments:
-                audio.transcript = new_segments
-                audio.caption = body.title
-                await audio.save()
+            if body.text_content:
+                new_segments = parse_transcript_from_text(body.text_content)
+                if new_segments:
+                    audio.transcript = new_segments
+            audio.caption = body.title
+            await audio.save()
     return build_post_response(post, audio, is_detail=True)
