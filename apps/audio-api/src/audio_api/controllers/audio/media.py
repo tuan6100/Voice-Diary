@@ -4,10 +4,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Response, Depends
 from beanie import PydanticObjectId
 from redis.asyncio import Redis
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, StreamingResponse
 
 from audio_api.cores.injectable import get_redis, get_current_user_id, get_s3_client
 from audio_api.models.audio import Audio
+from audio_api.services.word_service import WordService
 from audio_api.utils.transcript_converter import generate_webvtt, generate_plain_text
 from shared_storage.s3 import S3Client
 
@@ -91,6 +92,38 @@ async def export_to_google_docs(
         }
     except Exception as e:
         raise HTTPException(500, f"Export failed: {str(e)}")
+
+
+@router.get("/{audio_id}/export/word")
+async def export_to_word(
+        audio_id: PydanticObjectId,
+        user_id: str = Depends(get_current_user_id)
+):
+    audio = await Audio.get(audio_id)
+    if audio.user_id != user_id:
+        raise HTTPException(403, "You do not have permission to access this audio")
+    if not audio:
+        raise HTTPException(404, "Audio not found")
+    if not audio.transcript:
+        raise HTTPException(400, "Audio has no transcript to export")
+    try:
+        filename = f"Transcript - {audio.caption or 'Untitled'}.docx"
+        safe_filename = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in ' .-_']).rstrip()
+        file_stream = WordService.create_transcript_docx(
+            title=audio.caption or "Untitled Audio",
+            transcript=audio.transcript
+        )
+        headers = {
+            'Content-Disposition': f'attachment; filename="{safe_filename}"'
+        }
+        return StreamingResponse(
+            file_stream,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers=headers
+        )
+
+    except Exception as e:
+        raise HTTPException(500, f"Word export failed: {str(e)}")
 
 
 @router.put("/{audio_id}/sync-google-docs")

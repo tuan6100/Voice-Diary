@@ -5,12 +5,13 @@ from pydantic import Field
 
 
 class Album(Document):
-    user_id: Indexed(str)
-    title: str
+    user_id: str
+    name: str
     description: Optional[str] = None
     cover_url: Optional[str] = None
     post_ids: List[str] = []
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     class Settings:
         name = "albums"

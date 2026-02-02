@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 
 from authlib.jose import jwt
 from fastapi import HTTPException, APIRouter
@@ -8,13 +9,15 @@ from google.auth.transport import requests as google_requests
 
 from audio_api.cores.config import settings
 from audio_api.cores.redis import get_redis_client
-from audio_api.dtos.request.auth import MobileLoginRequest
+from audio_api.dtos.request.auth import GoogleLoginRequest, TraditionalLoginRequest, TraditionalRegisterRequest
+from audio_api.dtos.response.auth import UserResponse, LoggedInResponse
 from audio_api.models.user import User
+from audio_api.utils.password_encryption import hash_password, verify_password
 
 router = APIRouter()
 
-@router.post("/mobile-login")
-async def mobile_login(payload: MobileLoginRequest):
+@router.post("/google-login")
+async def mobile_login(payload: GoogleLoginRequest):
     try:
         # 1. Cấu hình Flow để đổi code lấy token
         flow = Flow.from_client_config(
@@ -58,33 +61,74 @@ async def mobile_login(payload: MobileLoginRequest):
         redis = get_redis_client()
         await redis.setex(
             f"google_token:{user.id}",
-            3500,
+            3600,
             credentials.token
         )
         await redis.close()
         # 6. Tạo JWT App Token
         app_token = _create_jwt_token(str(user.id))
         # 7. Trả về JSON (Mobile sẽ parse cái này)
-        return {
-            "access_token": app_token,
-            "token_type": "bearer",
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "name": user.display_name,
-                "avatar": user.avatar_url
-            }
-        }
+        return LoggedInResponse(
+            access_token=app_token,
+            user=UserResponse(
+                id=str(user.id),
+                email=user.email,
+                name=user.username,
+                avatar=user.avatar_url
+            )
+        )
 
     except ValueError as e:
         raise HTTPException(400, f"Token verification failed: {str(e)}")
     except Exception as e:
         raise HTTPException(400, f"Mobile login failed: {str(e)}")
 
+@router.post("/traditional-register")
+async def traditional_register(payload: TraditionalRegisterRequest):
+    existing_user = await User.find_one(User.email == payload.email)
+    if existing_user:
+        raise HTTPException(400, "Email already registered")
+    user = User(
+        username=payload.name,
+        email=payload.email,
+        password_hash=hash_password(payload.password)
+    )
+    await user.insert()
+    app_token = _create_jwt_token(str(user.id))
+    return LoggedInResponse(
+        access_token=app_token,
+        user=UserResponse(
+            id=str(user.id),
+            email=user.email,
+            name=user.username,
+            avatar=user.avatar_url
+        )
+    )
+
+@router.post("/traditional-login")
+async def traditional_login(request: TraditionalLoginRequest):
+    user = await User.find_one(User.email == request.email)
+    if not user or not verify_password(request.password, user.password_hash):
+        raise HTTPException(401, "Invalid email or password")
+    app_token = _create_jwt_token(str(user.id))
+    return LoggedInResponse(
+        access_token=app_token,
+        user=UserResponse(
+            id=str(user.id),
+            email=user.email,
+            name=user.username,
+            avatar=user.avatar_url
+        )
+    )
+
 
 def _create_jwt_token(user_id: str):
     payload = {
         "sub": user_id,
-        "exp": datetime.now(datetime.UTC) + timedelta(days=7)
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
     }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
+    return jwt.encode(
+        header={"alg": "HS256"},
+        payload=payload,
+        key=settings.JWT_SECRET_KEY
+    )

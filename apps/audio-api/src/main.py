@@ -7,7 +7,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from audio_api.cores import injectable
 from audio_api.cores.config import settings
-from audio_api.cores.database import init_db
+from audio_api.cores.mongo import init_db
 from audio_api.router.router import api_router
 
 from shared_messaging.producer import RabbitMQProducer

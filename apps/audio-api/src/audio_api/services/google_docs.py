@@ -26,7 +26,7 @@ class GoogleDocsService:
             full_text = ""
             for seg in transcript:
                 time_str = f"[{int(seg.start // 60):02d}:{int(seg.start % 60):02d}]"
-                full_text += f"{time_str} {seg.text}\n"
+                full_text += f"[{time_str}] {seg.speaker.lower()}: {seg.text}\n"
             requests.append({
                 'insertText': {
                     'location': {'index': 1},

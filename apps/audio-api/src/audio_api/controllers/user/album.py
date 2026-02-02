@@ -1,23 +1,29 @@
-import random
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Query
 from beanie import PydanticObjectId
-from beanie.operators import In
+from fastapi import APIRouter, HTTPException, Depends, Query
 
 from audio_api.cores.injectable import get_current_user_id
+from audio_api.dtos.request.album import CreateAlbumRequest, RenameAlbumRequest, AddPostToAlbumRequest
+from audio_api.dtos.response.album import (
+    AlbumMessageResponse,
+    AlbumPlaylistResponse,
+    AlbumShuffleResponse,
+    build_album_playlist_response,
+    build_album_shuffle_response, AlbumResponse, build_album_response,
+)
 from audio_api.models.album import Album
 from audio_api.models.post import Post
-from audio_api.models.audio import Audio
 
 router = APIRouter()
 
+
 @router.post("/", summary="1. Tạo album mới")
 async def create_album(
-        title: str,
+        request: CreateAlbumRequest,
         user_id: str = Depends(get_current_user_id)
 ):
-    album = Album(user_id=user_id, title=title, post_ids=[])
+    album = Album(user_id=user_id, title=request.title, post_ids=[])
     await album.insert()
     return album
 
@@ -42,21 +48,18 @@ async def search_albums(
     return albums
 
 
-@router.get("/{album_id}", summary="4. Xem chi tiết album")
+@router.get("/{album_id}", summary="4. Xem chi tiết album", response_model=AlbumResponse)
 async def get_album_detail(album_id: PydanticObjectId):
     album = await Album.get(album_id)
     if not album:
         raise HTTPException(404, "Album not found")
-    return {
-        **album.model_dump(),
-        "total_tracks": len(album.post_ids)
-    }
+    return build_album_response(album)
 
 
 @router.patch("/{album_id}", summary="5. Đổi tên album")
 async def update_album(
         album_id: PydanticObjectId,
-        title: str,
+        request: RenameAlbumRequest,
         user_id: str = Depends(get_current_user_id)
 ):
     album = await Album.get(album_id)
@@ -65,12 +68,12 @@ async def update_album(
     if album.user_id != user_id:
         raise HTTPException(403, "You do not have permission to modify this album")
 
-    album.title = title
+    album.title = request.title
     await album.save()
     return album
 
 
-@router.delete("/{album_id}", summary="6. Xóa album")
+@router.delete("/{album_id}", summary="6. Xóa album", response_model=AlbumMessageResponse)
 async def delete_album(
         album_id: PydanticObjectId,
         user_id: str = Depends(get_current_user_id)
@@ -81,13 +84,13 @@ async def delete_album(
     if album.user_id != user_id:
         raise HTTPException(403, "You do not have permission to delete this album")
     await album.delete()
-    return {"message": "Album deleted successfully"}
+    return AlbumMessageResponse(message="Album deleted successfully")
 
 
 @router.post("/{album_id}/posts", summary="7. Thêm bài hát vào album")
 async def add_post_to_album(
         album_id: PydanticObjectId,
-        post_id: str,
+        request: AddPostToAlbumRequest,
         user_id: str = Depends(get_current_user_id)
 ):
     album = await Album.get(album_id)
@@ -95,11 +98,13 @@ async def add_post_to_album(
         raise HTTPException(404, "Album not found")
     if album.user_id != user_id:
         raise HTTPException(403, "You do not have permission to modify this album")
-    post = await Post.get(PydanticObjectId(post_id))
+
+    post = await Post.get(PydanticObjectId(request.post_id))
     if not post:
         raise HTTPException(404, "Post not found")
-    if post_id not in album.post_ids:
-        album.post_ids.append(post_id)
+
+    if request.post_id not in album.post_ids:
+        album.post_ids.append(request.post_id)
         await album.save()
 
     return album
@@ -124,60 +129,19 @@ async def remove_post_from_album(
     return album
 
 
-
-async def _build_track_list(post_ids: List[str]):
-    if not post_ids:
-        return []
-    obj_ids = [PydanticObjectId(i) for i in post_ids]
-    posts = await Post.find(In(Post.id, obj_ids)).to_list()
-    post_map = {str(p.id): p for p in posts}
-    ordered_posts = [post_map[pid] for pid in post_ids if pid in post_map]
-    tracks = []
-    for p in ordered_posts:
-        if not p.audio_id:
-            continue
-        audio = await Audio.get(PydanticObjectId(p.audio_id))
-        if audio and audio.audio_meta and audio.audio_meta.hls_url:
-            tracks.append({
-                "title": p.caption or "Untitled",
-                "file": audio.audio_meta.hls_url,
-                "poster": "https://via.placeholder.com/150",
-                "howl": None,
-                "meta": {
-                    "postId": str(p.id),
-                    "audioId": str(audio.id),
-                    "duration": audio.audio_meta.duration,
-                    "artist": p.user_id
-                }
-            })
-    return tracks
-
-
-@router.get("/{album_id}/playlist", summary="9. Lấy Playlist phát nhạc")
+@router.get("/{album_id}/playlist", summary="9. Lấy Playlist phát nhạc", response_model=AlbumPlaylistResponse)
 async def get_playlist(album_id: PydanticObjectId):
     album = await Album.get(album_id)
     if not album:
         raise HTTPException(404, "Album not found")
-    tracks = await _build_track_list(album.post_ids)
-    return {
-        "id": str(album.id),
-        "album": album.title,
-        "tracks": tracks,
-        "total_duration": sum([t['meta']['duration'] for t in tracks if t['meta']['duration']])
-    }
+
+    return await build_album_playlist_response(album)
 
 
-@router.get("/{album_id}/shuffle", summary="10. Phát ngẫu nhiên (Shuffle)")
+@router.get("/{album_id}/shuffle", summary="10. Phát ngẫu nhiên (Shuffle)", response_model=AlbumShuffleResponse)
 async def get_shuffled_playlist(album_id: PydanticObjectId):
     album = await Album.get(album_id)
     if not album:
         raise HTTPException(404, "Album not found")
-    shuffled_ids = list(album.post_ids)
-    random.shuffle(shuffled_ids)
-    tracks = await _build_track_list(shuffled_ids)
-    return {
-        "id": str(album.id),
-        "album": album.title,
-        "mode": "shuffle",
-        "tracks": tracks
-    }
+
+    return await build_album_shuffle_response(album)

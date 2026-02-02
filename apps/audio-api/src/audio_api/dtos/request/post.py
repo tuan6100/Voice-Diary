@@ -1,14 +1,15 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic.v1 import BaseModel
+from audio_api.cores.model import CamelModel
 
-class CreatePostRequest(BaseModel):
+
+class CreatePostRequest(CamelModel):
     user_id: str
     caption: str = None
     hashtags: list[str] = []
 
-class SearchFilter(BaseModel):
+class SearchFilter(CamelModel):
     min_duration: int = 0
     max_duration: int = 3600
     from_date: Optional[datetime] = None

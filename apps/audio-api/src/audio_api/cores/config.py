@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     MONGODB_URL: str = "mongodb://localhost:27017"
     DATABASE_NAME: str = "voice_diary_db"
 
+    GOOGLE_CLIENT_ID: str = "GOOGLE_CLIENT_ID"
+    GOOGLE_CLIENT_SECRET: str = "GOOGLE_CLIENT_SECRET"
+
     class Config:
         env_file = ".env"
 

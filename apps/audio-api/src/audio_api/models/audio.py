@@ -13,6 +13,7 @@ class ProcessingStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 class TranscriptSegment(BaseModel):
+    speaker: str = "Unknown"
     start: float
     end: float
     text: str

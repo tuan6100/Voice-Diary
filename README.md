@@ -38,28 +38,28 @@ When wired, response is:
 #### Auth (`/api/v1/auth`)
 | Method | Path                 | Purpose                    | Request                             | Response / Notes                     |
 |--------|----------------------|----------------------------|-------------------------------------|--------------------------------------|
-| POST   | `/auth/mobile-login` | Login/Register with Google | JSON: `MobileLoginRequest` (`code`) | `{ access_token, user, token_type }` |
+| POST   | `/auth/mobile-login` | Login/Register with Google | JSON: `GoogleLoginRequest` (`code`) | `{ access_token, user, token_type }` |
 
 #### Feed & Posts (`/api/v1/feed`)
 | Method | Path                   | Purpose                 | Request                                         | Response / Notes                                                   |
 |--------|------------------------|-------------------------|-------------------------------------------------|--------------------------------------------------------------------|
-| GET    | `/feed/`               | Get feed list           | Query: `limit`, `skip`, optional `q`, `hashtag` | `List[dict]` with `{ post, audio_status, duration, preview_text }` |
-| POST   | `/feed/{post_id}/like` | Increment likes counter | Path: `post_id`                                 | `{ likes: <int> }`                                                 |
-| POST   | `/feed/{post_id}/view` | Increment views counter | Path: `post_id`                                 | `{ status: "ok" }`                                                 |
+| GET    | `/feed/`               | Get feed list           | Query: `limit`, `skip`, optional `q`, `hashtag` | `List[FeedItemResponse]` with `{ post, audio_status, duration, preview_text }` |
+| POST   | `/feed/{post_id}/like` | Increment likes counter | Path: `post_id`                                 | `ToggleLikeResponse`: `{ likes: <int> }`                                                 |
+| POST   | `/feed/{post_id}/view` | Increment views counter | Path: `post_id`                                 | `IncreaseViewResponse`: `{ status: "ok" }`                                                 |
 
 #### Albums (`/api/v1/albums`)
 | Method | Path                                   | Purpose                  | Request / Params                                                     | Response / Notes                                                                      |
 |--------|----------------------------------------|--------------------------|----------------------------------------------------------------------|---------------------------------------------------------------------------------------|
-| POST   | `/albums/?title=...`                   | Create an album          | Query: `title` (string). Auth required.                              | Returns `Album` document.                                                             |
+| POST   | `/albums/`                             | Create an album          | JSON body: `CreateAlbumRequest` (`title`). Auth required.            | Returns `Album` document.                                                             |
 | GET    | `/albums/my`                           | Get my albums            | Auth required.                                                       | Returns `List[Album]` for current user.                                               |
 | GET    | `/albums/search?keyword=...&limit=10`  | Search albums            | Query: `keyword` (optional, min 1 char), `limit` (int, default 10).  | If no `keyword`, returns recent albums (sorted by `-id`).                             |
-| GET    | `/albums/{album_id}`                   | Album detail             | Path: `album_id` (Mongo ObjectId).                                   | Album fields plus `total_tracks`. 404 if not found.                                   |
-| PATCH  | `/albums/{album_id}?title=...`         | Rename album             | Path: `album_id`. Query: `title`. Auth required.                     | Returns updated `Album`. 403 if not owner; 404 if not found.                          |
-| DELETE | `/albums/{album_id}`                   | Delete album             | Path: `album_id`. Auth required.                                     | `{ "message": "Album deleted successfully" }`. 403 if not owner; 404 if not found.    |
-| POST   | `/albums/{album_id}/posts?post_id=...` | Add a post to album      | Path: `album_id`. Query: `post_id` (string ObjectId). Auth required. | Returns updated `Album`. 404 if album/post missing; 403 if not owner.                 |
+| GET    | `/albums/{album_id}`                   | Album detail             | Path: `album_id` (Mongo ObjectId).                                   | `AlbumDetailResponse` (Album fields plus `total_tracks`). 404 if not found.           |
+| PATCH  | `/albums/{album_id}`                   | Rename album             | Path: `album_id`. JSON body: `RenameAlbumRequest` (`title`). Auth required. | Returns updated `Album`. 403 if not owner; 404 if not found.                          |
+| DELETE | `/albums/{album_id}`                   | Delete album             | Path: `album_id`. Auth required.                                     | `AlbumMessageResponse`: `{ "message": "Album deleted successfully" }`. 403 if not owner; 404 if not found.    |
+| POST   | `/albums/{album_id}/posts`             | Add a post to album      | Path: `album_id`. JSON body: `AddPostToAlbumRequest` (`post_id`). Auth required. | Returns updated `Album`. 404 if album/post missing; 403 if not owner.                 |
 | DELETE | `/albums/{album_id}/posts/{post_id}`   | Remove a post from album | Path: `album_id`, `post_id`. Auth required.                          | Returns updated `Album`. 404 if album missing or post not in album; 403 if not owner. |
-| GET    | `/albums/{album_id}/playlist`          | Playlist for album       | Path: `album_id`.                                                    | `{ id, album, tracks[], total_duration }` (tracks include `file` = HLS URL).          |
-| GET    | `/albums/{album_id}/shuffle`           | Shuffle playlist         | Path: `album_id`.                                                    | `{ id, album, mode: "shuffle", tracks[] }`.                                           |
+| GET    | `/albums/{album_id}/playlist`          | Playlist for album       | Path: `album_id`.                                                    | `AlbumPlaylistResponse`: `{ id, album, tracks[], total_duration }` (tracks include `file` = HLS URL).          |
+| GET    | `/albums/{album_id}/shuffle`           | Shuffle playlist         | Path: `album_id`.                                                    | `AlbumShuffleResponse`: `{ id, album, mode: "shuffle", tracks[] }`.                                           |
 
 
 

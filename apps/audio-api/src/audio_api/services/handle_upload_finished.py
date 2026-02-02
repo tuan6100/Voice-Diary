@@ -33,7 +33,7 @@ class HandleUploadFinishedService:
                 duration=results.get("duration", 0.0)
             )
             audio.transcript = [
-                TranscriptSegment(start=s["start"], end=s["end"], text=s["text"])
+                TranscriptSegment(speaker=s["speaker"], start=s["start"], end=s["end"], text=s["text"])
                 for s in results.get("transcript_aligned", [])
             ]
             await audio.save()
