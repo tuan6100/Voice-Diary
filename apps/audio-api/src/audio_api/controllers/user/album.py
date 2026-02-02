@@ -19,28 +19,25 @@ from audio_api.models.post import Post
 router = APIRouter()
 
 
-@router.post("/", summary="1. Tạo album mới")
+@router.post("/", summary="1. Tạo album mới", response_model=AlbumResponse)
 async def create_album(
         request: CreateAlbumRequest,
         user_id: str = Depends(get_current_user_id)
 ):
     album = Album(user_id=user_id, title=request.title)
     await album.insert()
-    return album
+    return build_album_response(album)
 
 
-@router.get("/my", summary="2. Lấy danh sách album của tôi")
+@router.get("/my", summary="2. Lấy danh sách album của tôi", response_model=list[AlbumResponse])
 async def get_my_albums(
         user_id: str = Depends(get_current_user_id)
 ):
     albums = await Album.find(Album.user_id == user_id).to_list()
-    return [{
-        "id": str(album.id),
-        "title": album.title,
-    } for album in albums]
+    return [build_album_response(album) for album in albums]
 
 
-@router.get("/search", summary="3. Tìm kiếm album")
+@router.get("/search", summary="3. Tìm kiếm album", response_model=list[AlbumResponse])
 async def search_albums(
         keyword: Optional[str] = Query(None, min_length=1),
         limit: int = 10
@@ -49,7 +46,7 @@ async def search_albums(
         albums = await Album.find({"title": {"$regex": keyword, "$options": "i"}}).limit(limit).to_list()
     else:
         albums = await Album.find_all().sort("-id").limit(limit).to_list()
-    return albums
+    return [build_album_response(album) for album in albums]
 
 
 @router.get("/{album_id}", summary="4. Xem chi tiết album", response_model=AlbumResponse)
@@ -60,7 +57,7 @@ async def get_album_detail(album_id: PydanticObjectId):
     return build_album_response(album)
 
 
-@router.patch("/{album_id}", summary="5. Đổi tên album")
+@router.patch("/{album_id}", summary="5. Đổi tên album", response_model=AlbumResponse)
 async def update_album(
         album_id: PydanticObjectId,
         request: RenameAlbumRequest,
@@ -74,7 +71,7 @@ async def update_album(
 
     album.title = request.title
     await album.save()
-    return album
+    return build_album_response(album)
 
 
 @router.delete("/{album_id}", summary="6. Xóa album", response_model=AlbumMessageResponse)
@@ -111,7 +108,7 @@ async def add_post_to_album(
         album.post_ids.append(request.post_id)
         await album.save()
 
-    return album
+    return build_album_response(album)
 
 
 @router.delete("/{album_id}/posts/{post_id}", summary="8. Xóa bài hát khỏi album")
@@ -130,7 +127,7 @@ async def remove_post_from_album(
         await album.save()
     else:
         raise HTTPException(404, "Post not in this album")
-    return album
+    return build_album_response(album)
 
 
 @router.get("/{album_id}/playlist", summary="9. Lấy Playlist phát nhạc", response_model=AlbumPlaylistResponse)

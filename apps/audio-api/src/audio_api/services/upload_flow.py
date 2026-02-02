@@ -2,7 +2,11 @@ import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 
-from audio_api.models.audio import ProcessingStatus, Audio
+from redis.asyncio import Redis
+
+from audio_api.dtos.response.upload import UploadInitResponse
+from audio_api.models.audio import ProcessingStatus, Audio, AudioMetadata
+from audio_api.models.post import Post
 from shared_messaging.producer import RabbitMQProducer
 from shared_storage.s3 import S3Client
 
@@ -17,33 +21,57 @@ class UploadFlowService:
         self.s3 = s3
         self.Producer = producer
 
-    async def create_upload_session(self, filename: str, content_type: str):
+    async def create_upload_session(self, filename: str, content_type: str, user_id: str, redis: Redis):
         job_id = str(uuid.uuid4())
         date_prefix = datetime.now(tz=timezone(timedelta(hours=7))).strftime('%Y-%m-%d')
         object_key = f"raw/{date_prefix}/{job_id}/{filename}"
-
         url = self.s3.generate_presigned_url(
             object_key=object_key,
             content_type=content_type
         )
+        async with redis.pipeline() as pipe:
+            redis_key = f"job:{job_id}"
+            await pipe.hset(redis_key, mapping={
+                "job_id": job_id,
+                "user_id": user_id,
+                "status": "UPLOADING",
+                "filename": filename,
+                "storage_path": object_key,
+                "progress": 0,
+                "created_at": datetime.now().isoformat()
+            })
+            await pipe.expire(redis_key, 3600)
+            await pipe.execute()
 
-        return {
-            "job_id": job_id,
-            "presigned_url": url,
-            "storage_path": object_key
-        }
+        return UploadInitResponse(
+            job_id=job_id,
+            file_name=filename,
+            presigned_url=url,
+            expires_in=3600
+        )
 
-    async def trigger_processing(self, user_id: str, job_id: str):
+    async def trigger_processing(self, user_id: str, job_id: str, title: str = "Untitled", duration: float = 0.0, file_size: int = 0):
         new_audio = Audio(
             user_id=user_id,
             job_id=job_id,
             status=ProcessingStatus.PENDING,
             caption="New Recording",
-            created_at=datetime.now(datetime.UTC) ,
+            created_at=datetime.now(timezone.utc),
             transcript=[],
+            audio_meta= AudioMetadata(
+                duration=duration,
+                file_size=file_size
+            )
         )
-        # Beanie insert
         await new_audio.insert()
+        new_post = Post(
+            user_id=user_id,
+            audio_id=str(new_audio.id),
+            title=title,
+            uploaded_date=datetime.now(timezone.utc),
+            views_count=0
+        )
+        await new_post.insert()
         event = FileUploadedEvent(
             job_id=job_id,
             user_id=user_id,

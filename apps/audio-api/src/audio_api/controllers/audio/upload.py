@@ -5,7 +5,7 @@ from redis.asyncio import Redis
 from sse_starlette import EventSourceResponse
 
 from audio_api.cores.injectable import get_upload_service, get_current_user_id, get_redis, get_producer
-from audio_api.dtos.request.upload import UploadInitRequest
+from audio_api.dtos.request.upload import UploadInitRequest, UploadConfirmRequest
 from audio_api.dtos.response.upload import UploadInitResponse
 from audio_api.services.upload_flow import UploadFlowService
 from shared_messaging.producer import RabbitMQProducer
@@ -15,26 +15,26 @@ router = APIRouter()
 @router.post("/init", response_model=UploadInitResponse)
 async def init_upload(
         request: UploadInitRequest,
-        service: UploadFlowService = Depends(get_upload_service)
+        service: UploadFlowService = Depends(get_upload_service),
+        user_id: str = Depends(get_current_user_id),
+        redis: Redis = Depends(get_redis)
 ):
-    """
-    Client gọi API này trước.
-    Nhận về Presigned URL để upload trực tiếp lên S3.
-    """
     result = await service.create_upload_session(
         filename=request.filename,
-        content_type=request.content_type
+        content_type=request.content_type,
+        user_id=user_id,
+        redis=redis
     )
     return result
 
-@router.post("/{job_id}/confirm")
+@router.post("/confirm")
 async def confirm_upload(
-        job_id: str,
+        request: UploadConfirmRequest,
         user_id: str = Depends(get_current_user_id),
         service: UploadFlowService = Depends(get_upload_service),
         redis: Redis = Depends(get_redis)
 ):
-    redis_key = f"job:{job_id}"
+    redis_key = f"job:{request.job_id}"
     job_data = await redis.hgetall(redis_key)
     if not job_data:
         raise HTTPException(404, "Job not found or expired")
@@ -43,7 +43,7 @@ async def confirm_upload(
         job_owner = job_owner.decode('utf-8') if isinstance(job_owner, bytes) else job_owner
         if job_owner != user_id:
             raise HTTPException(403, "You don't have permission to confirm this upload")
-    result = await service.trigger_processing(user_id, job_id)
+    result = await service.trigger_processing(user_id, request.job_id, request.title, request.duration, request.file_size)
     return result
 
 
@@ -117,7 +117,11 @@ async def stream_progress(
         try:
             current_data = await redis.hgetall(f"job:{job_id}")
             if current_data:
-                decoded = {k.decode(): v.decode() for k, v in current_data.items()}
+                decoded = {}
+                for k, v in current_data.items():
+                    key = k.decode() if isinstance(k, bytes) else k
+                    value = v.decode() if isinstance(v, bytes) else v
+                    decoded[key] = value
                 yield {
                     "event": "update",
                     "data": json.dumps(decoded)
@@ -125,9 +129,11 @@ async def stream_progress(
             async for message in pubsub.listen():
                 if await request.is_disconnected():
                     break
-
                 if message["type"] == "message":
-                    data = message["data"].decode("utf-8")
+                    data = message["data"]
+                    if isinstance(data, bytes):
+                        data = data.decode("utf-8")
+
                     yield {
                         "event": "update",
                         "data": data

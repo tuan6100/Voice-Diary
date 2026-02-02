@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: str = "S3_ACCESS_KEY"
     S3_SECRET_KEY: str = "S3_SECRET_KEY"
     S3_BUCKET_NAME: str = "audio-management"
-    CLEANUP_TARGETS: List[str] = ["clean", "segments", "enhanced", "transcripts"]
+    CLEANUP_TARGETS: List[str] = ["clean", "segments", "enhanced"]
 
     class Config:
         env_file = ".env"

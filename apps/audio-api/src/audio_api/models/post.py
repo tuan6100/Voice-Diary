@@ -8,10 +8,10 @@ from pydantic import Field
 class Post(Document):
     user_id: Indexed(str)
     audio_id: Indexed(str)
-    title: Optional[str] = None
-    thumbnailUrl: Optional[str] = None
+    album_id: Optional[str] = None
+    title: str
+    thumbnail_url: Optional[str] = None
     hashtags: List[str] = []
-    likes_count: int = 0
     views_count: int = 0
     record_date: Optional[datetime] = None
     uploaded_date: datetime = Field(default_factory=datetime.utcnow)
