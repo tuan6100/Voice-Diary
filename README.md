@@ -1,4 +1,4 @@
-# Voice Diary
+# Sonic: Personal Audio Journal
 
 A modular, event-driven audio processing system built as a set of microservices. It ingests audio uploads, processes them through a workflow (preprocess → segment → enhance → language detection → recognition + diarization + transcoding → post-processing), and exposes APIs for upload, streaming, and feed/albums.
 
