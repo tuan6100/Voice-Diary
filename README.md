@@ -3,7 +3,7 @@
 A modular, event-driven audio processing system built as a set of microservices. It ingests audio uploads, processes them through a workflow (preprocess → segment → enhance → language detection → recognition + diarization + transcoding → post-processing), and exposes APIs for upload, streaming, and feed/albums.
 
 ## Overview
-Voice Diary orchestrates a pipeline of audio processing tasks using async Python services and shared libraries. New uploads are accepted by `audio-api`, then a RabbitMQ-based workflow is orchestrated by `audio-orchestrator`. Work is distributed to specialized worker services.
+Sonic orchestrates a pipeline of audio processing tasks using async Python services and shared libraries. New uploads are accepted by `audio-api`, then a RabbitMQ-based workflow is orchestrated by `audio-orchestrator`. Work is distributed to specialized worker services.
 
 ### API Table
 Base URL: `http://localhost:8000/api/v1`****
